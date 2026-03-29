@@ -1,0 +1,26 @@
+# version: "3.9"
+
+services:
+  backend:
+    build: ./robot_backend
+    container_name: robot-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - ./.env
+    volumes:
+      - ./robot_backend:/app
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./robot-frontend
+    container_name: robot-frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./robot-frontend:/app
+      - /app/node_modules
+    # environment:
+    #   - VITE_API_BASE_URL=http://backend:8000
+    depends_on:
+      - backend

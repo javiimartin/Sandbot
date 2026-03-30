@@ -1,95 +1,54 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-from typing import List
+"""
+Punto de entrada de la aplicación FastAPI.
+
+Arranque en desarrollo:
+  uvicorn main:app --reload
+
+Arranque en producción (Docker):
+  uvicorn main:app --host 0.0.0.0 --port 8000
+"""
+
+import logging
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import json
-import asyncio
- 
 
-app = FastAPI()
+from app.config import settings
+from app.routers import websocket as ws_router
+from app.routers import messages  as msg_router
 
+# ── Logging ──────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.DEBUG if settings.debug else logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+# ── App factory ──────────────────────────────────────────────────
+app = FastAPI(
+    title=settings.app_title,
+    version=settings.app_version,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+# CORS — en producción restringe allowed_origins en el .env
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ── Routers ──────────────────────────────────────────────────────
+app.include_router(ws_router.router)
+app.include_router(msg_router.router)
 
 
-# ===============================
-# Connection Manager
-# ===============================
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        print("Robot conectado. Total conexiones:", len(self.active_connections))
-
-        await websocket.send_text(json.dumps({
-            "type": "status",
-            "connected": True
-        }))
-
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-        print("Robot desconectado. Total conexiones:", len(self.active_connections))
-
-    async def send_message(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
-
-
-manager = ConnectionManager()
-
-
-# ===============================
-# WebSocket Endpoint
-# ===============================
-
-@app.websocket("/ws/robot")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-
-    try:
-        while True:
-            # Mantener la conexión viva
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
-
-# ===============================
-# HTTP Endpoint para enviar mensaje
-# ===============================
-
-class Message(BaseModel):
-    text: str
-
-
-@app.post("/send")
-async def send_message(message: Message):
-    payload = {
-        "type": "speak",
-        "text": message.text
-    }
-
-    disconnected = []
-
-    for connection in manager.active_connections:
-        try:
-            await connection.send_text(json.dumps(payload))
-        except RuntimeError:
-            disconnected.append(connection)
-
-    for connection in disconnected:
-        manager.active_connections.remove(connection)
-
-    return {"status": "ok"}
-
+# ── Health check ─────────────────────────────────────────────────
+@app.get("/health", tags=["meta"])
+async def health():
+    """Endpoint de comprobación de estado. Útil para Docker healthcheck."""
+    return {"status": "ok", "version": settings.app_version}

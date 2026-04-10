@@ -1,122 +1,112 @@
 package com.ugr.sanbot_app;
 
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.net.URI;
 
+/**
+ * Cliente WebSocket que conecta el robot con el backend FastAPI.
+ *
+ * Mensajes recibidos (backend → robot):
+ *   { "type": "wizard_message", "text": "...", "message_id": "..." }
+ *   El mago ha enviado un texto que el robot debe reproducir en voz alta.
+ *
+ * Mensajes enviados (robot → backend):
+ *   { "type": "robot_speech", "text": "..." }
+ *   El robot (o el participante) ha dicho algo; el backend lo reenvía
+ *   al frontend del mago para mostrarlo en el chat.
+ */
 public class RobotWebSocketClient extends WebSocketClient {
 
-    public interface MessageListener {
-        void onMessageReceived(String message);
+    private static final String TAG = "Mi_APP";
+
+    /** Callback invocado en el hilo de UI con el texto que el robot debe decir. */
+    public interface OnWizardMessageListener {
+        void onWizardMessage(String text);
     }
 
-    private static final String TAG = "WS_CLIENT";
+    private final OnWizardMessageListener listener;
 
-    // Tiempos de backoff exponencial (ms)
-    private static final long DELAY_INICIAL_MS = 2000;
-    private static final long DELAY_MAXIMO_MS  = 30000;
-
-    private MessageListener listener;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private long delayActual = DELAY_INICIAL_MS;
-    private boolean cierreIntencional = false;
-
-    public RobotWebSocketClient(URI serverUri, MessageListener listener) {
+    public RobotWebSocketClient(URI serverUri, OnWizardMessageListener listener) {
         super(serverUri);
         this.listener = listener;
     }
 
-    // ------------------------------------------------------------------
-    // Llamar a este método para cerrar la conexión de forma intencionada
-    // (evita que se dispare la reconexión automática)
-    // ------------------------------------------------------------------
-    public void cerrarConexion() {
-        cierreIntencional = true;
-        handler.removeCallbacksAndMessages(null); // cancelar reintentos pendientes
-        close();
-        Log.d(TAG, "Conexión cerrada intencionalmente.");
-    }
-
-    // ------------------------------------------------------------------
-    // Callbacks WebSocket
-    // ------------------------------------------------------------------
+    // ── Lifecycle ────────────────────────────────────────────────────
 
     @Override
-    public void onOpen(ServerHandshake handshakedata) {
-        delayActual = DELAY_INICIAL_MS; // resetear backoff al conectar con éxito
-        Log.d(TAG, "Conectado al backend FastAPI.");
-    }
-
-    @Override
-    public void onMessage(String message) {
-        Log.d(TAG, "Mensaje recibido: " + message);
-
-        try {
-            JSONObject json = new JSONObject(message);
-            String type = json.getString("type");
-
-            if (type.equals("speak")) {
-                String text = json.getString("text");
-                if (listener != null) {
-                    listener.onMessageReceived(text);
-                }
-            }
-
-            if (type.equals("status")) {
-                Log.d(TAG, "Estado recibido del backend.");
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error parseando JSON: " + e.getMessage());
-        }
+    public void onOpen(ServerHandshake handshake) {
+        Log.i(TAG, "[WS] Conectado al backend: " + getURI());
     }
 
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        if (cierreIntencional) {
-            Log.d(TAG, "Conexión cerrada intencionalmente. No se reintentará.");
-            return;
-        }
-
-        Log.w(TAG, "Conexión perdida (code=" + code + ", reason=" + reason
-                + ", remote=" + remote + "). Reintentando en " + delayActual / 1000 + "s...");
-
-        programarReconexion();
+        Log.w(TAG, "[WS] Desconectado — código: " + code + " | razón: " + reason);
     }
 
     @Override
-    public void onError(Exception ex) {
-        // onError siempre va seguido de onClose, así que la reconexión
-        // se gestiona en onClose para no duplicar reintentos.
-        Log.e(TAG, "Error WebSocket: " + ex.getMessage());
+    public void onError(Exception e) {
+        Log.e(TAG, "[WS] Error de conexión: " + e.getMessage());
     }
 
-    // ------------------------------------------------------------------
-    // Lógica de reconexión con backoff exponencial
-    // ------------------------------------------------------------------
+    // ── Incoming messages ────────────────────────────────────────────
 
-    private void programarReconexion() {
-        handler.postDelayed(() -> {
-            Log.d(TAG, "Intentando reconexión... (próximo intento en "
-                    + Math.min(delayActual * 2, DELAY_MAXIMO_MS) / 1000 + "s si falla)");
+    @Override
+    public void onMessage(String raw) {
+        Log.d(TAG, "[WS] Mensaje recibido: " + raw);
 
-            // Duplicar el delay para el siguiente intento, con techo en DELAY_MAXIMO_MS
-            delayActual = Math.min(delayActual * 2, DELAY_MAXIMO_MS);
+        try {
+            JSONObject json    = new JSONObject(raw);
+            String     type    = json.optString("type", "");
 
-            try {
-                reconnect();
-            } catch (Exception e) {
-                Log.e(TAG, "Excepción al intentar reconnect(): " + e.getMessage());
-                // Si reconnect() falla por algún motivo interno, programar otro reintento
-                programarReconexion();
+            switch (type) {
+                case "wizard_message":
+                    String text = json.optString("text", "").trim();
+                    if (!text.isEmpty() && listener != null) {
+                        listener.onWizardMessage(text);
+                    }
+                    break;
+
+                case "status":
+                    // Mensaje de estado de conexión — ignorado en el robot por ahora
+                    break;
+
+                default:
+                    Log.d(TAG, "[WS] Tipo de mensaje no gestionado: " + type);
             }
 
-        }, delayActual);
+        } catch (JSONException e) {
+            Log.e(TAG, "[WS] Error al parsear JSON: " + e.getMessage());
+        }
+    }
+
+    // ── Outgoing messages ────────────────────────────────────────────
+
+    /**
+     * Envía al backend lo que el robot (o el participante) ha dicho.
+     * El backend lo reenvía al frontend del mago como burbuja de chat.
+     *
+     * @param text Texto reconocido por el STT o introducido en modo DEV.
+     */
+    public void sendRobotSpeech(String text) {
+        if (!isOpen()) {
+            Log.w(TAG, "[WS] sendRobotSpeech ignorado: socket no conectado.");
+            return;
+        }
+
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("type", "robot_speech");
+            payload.put("text", text);
+            send(payload.toString());
+            Log.d(TAG, "[WS] robot_speech enviado: " + text);
+        } catch (JSONException e) {
+            Log.e(TAG, "[WS] Error al construir robot_speech: " + e.getMessage());
+        }
     }
 }

@@ -1,43 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/main"
+<!--
+    Layout de MainActivity.
+    Los elementos de modo DEV (et_dev_input, btn_dev_send) se ocultan
+    programáticamente cuando MODE = AppMode.NORMAL.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="top"
+    android:background="#0b0f18">
 
-    <Button
-        android:id="@+id/boton_hablar"
-        android:layout_width="163dp"
-        android:layout_height="100dp"
-        android:layout_marginLeft="800dp"
-        android:layout_marginTop="200dp"
-        android:text="Hablar"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-
-    <Button
-        android:id="@+id/boton_saludo"
-        android:layout_width="150dp"
-        android:layout_height="100dp"
-        android:layout_marginStart="300dp"
-        android:layout_marginTop="200dp"
-        android:text="Saludar"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
+    <!-- ── Título ─────────────────────────────────────────────────── -->
     <TextView
-        android:id="@+id/textView_resultado_stt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Resultado STT: "
-        android:layout_marginBottom="64dp"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent" />
+        android:text="Sanbot WoZ"
+        android:textColor="#38bdf8"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
 
+    <!-- ── Estado / modo activo ───────────────────────────────────── -->
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Iniciando…"
+        android:textColor="#64748b"
+        android:textSize="13sp"
+        android:layout_marginBottom="16dp" />
 
+    <!-- ── Último texto enviado al backend ───────────────────────── -->
+    <TextView
+        android:id="@+id/tv_last_speech"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="—"
+        android:textColor="#e2e8f0"
+        android:textSize="15sp"
+        android:layout_marginBottom="32dp" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <!-- ── Botón saludo (siempre visible) ────────────────────────── -->
+    <Button
+        android:id="@+id/btn_saludo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Saludar"
+        android:layout_marginBottom="32dp" />
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Sección modo DEV — oculta en modo NORMAL
+    ══════════════════════════════════════════════════════════════════ -->
+
+    <TextView
+        android:id="@+id/tv_dev_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Simulación STT (modo DEV)"
+        android:textColor="#64748b"
+        android:textSize="11sp"
+        android:textAllCaps="true"
+        android:letterSpacing="0.1"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone" />
+
+    <!-- Campo de texto manual -->
+    <EditText
+        android:id="@+id/et_dev_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Escribe para simular lo que diría el usuario…"
+        android:textColor="#e2e8f0"
+        android:textColorHint="#64748b"
+        android:background="#1a2235"
+        android:padding="12dp"
+        android:imeOptions="actionSend"
+        android:inputType="text"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone" />
+
+    <!-- Botón enviar (modo DEV) -->
+    <Button
+        android:id="@+id/btn_dev_send"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Enviar al backend"
+        android:visibility="gone" />
+
+</LinearLayout>

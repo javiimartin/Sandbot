@@ -39,7 +39,7 @@ public class HandHelper {
         handMotionManager.doAbsoluteAngleMotion(levantarBrazo);
 
         // Decir "Hola"
-        speechHelper.decir("¡Hola!, me alegro de verte");
+        // speechHelper.decir("¡Hola!, me alegro de verte");
 
         // --- 2) Mantener brazo arriba durante 5 segundos
         handler.postDelayed(() -> {

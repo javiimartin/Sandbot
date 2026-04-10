@@ -45,9 +45,9 @@ public class HeadHelper {
         }, 400);
 
         // 3) Hablar después de 2 segundos
-        handler.postDelayed(() -> {
+        /*handler.postDelayed(() -> {
             speechHelper.decir("¡Qué zapatos más bonitos!");
-        }, 2400);
+        }, 2400);*/
 
         // 4) Volver a la posición normal (centro)
         handler.postDelayed(() -> {

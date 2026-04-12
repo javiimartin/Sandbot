@@ -2,6 +2,8 @@ package com.ugr.sanbot_app;
 
 import android.util.Log;
 
+import androidx.core.view.OneShotPreDrawListener;
+
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.json.JSONException;
@@ -30,11 +32,17 @@ public class RobotWebSocketClient extends WebSocketClient {
         void onWizardMessage(String text);
     }
 
-    private final OnWizardMessageListener listener;
+    public interface OnEmotionListener {
+        void onEmotion(String emotion);
+    }
 
-    public RobotWebSocketClient(URI serverUri, OnWizardMessageListener listener) {
+    private final OnWizardMessageListener listener;
+    private final OnEmotionListener emotionListener;
+
+    public RobotWebSocketClient(URI serverUri, OnWizardMessageListener listener, OnEmotionListener emotionListener) {
         super(serverUri);
         this.listener = listener;
+        this.emotionListener = emotionListener;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────
@@ -70,6 +78,15 @@ public class RobotWebSocketClient extends WebSocketClient {
                     if (!text.isEmpty() && listener != null) {
                         listener.onWizardMessage(text);
                     }
+                    break;
+
+                case "emotion":
+                    String emotion = json.optString("emotion", "NORMAL").trim();
+
+                    if (!emotion.isEmpty() && emotionListener != null) {
+                        emotionListener.onEmotion(emotion);
+                    }
+
                     break;
 
                 case "status":

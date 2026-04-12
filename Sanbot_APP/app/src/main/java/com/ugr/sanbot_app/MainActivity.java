@@ -19,6 +19,7 @@ import com.qihancloud.opensdk.function.unit.SpeechManager;
 import com.qihancloud.opensdk.function.unit.WheelMotionManager;
 import com.qihancloud.opensdk.function.unit.interfaces.speech.RecognizeListener;
 import com.qihancloud.opensdk.function.unit.interfaces.speech.WakenListener;
+import com.qihancloud.opensdk.function.unit.SystemManager;
 
 import java.net.URI;
 
@@ -54,6 +55,7 @@ public class MainActivity extends BindBaseActivity {
     private SpeechHelper speechHelper;
     private HeadHelper   headHelper;
     private HandHelper   handHelper;
+    private EmotionHelper emotionHelper;
 
     // ── WebSocket ────────────────────────────────────────────────────
     private RobotWebSocketClient webSocketClient;
@@ -126,6 +128,7 @@ public class MainActivity extends BindBaseActivity {
         SpeechManager     speechManager     = (SpeechManager)     getUnitManager(FuncConstant.SPEECH_MANAGER);
         HeadMotionManager headMotionManager = (HeadMotionManager) getUnitManager(FuncConstant.HEADMOTION_MANAGER);
         HandMotionManager handMotionManager = (HandMotionManager) getUnitManager(FuncConstant.HANDMOTION_MANAGER);
+        SystemManager     systemManager     = (SystemManager)     getUnitManager(FuncConstant.SYSTEM_MANAGER);
 
         // HardWareManager y WheelMotionManager disponibles para uso futuro
         HardWareManager  hardWareManager   = (HardWareManager)   getUnitManager(FuncConstant.HARDWARE_MANAGER);
@@ -134,6 +137,7 @@ public class MainActivity extends BindBaseActivity {
         speechHelper = new SpeechHelper(speechManager);
         headHelper   = new HeadHelper(headMotionManager, speechHelper);
         handHelper   = new HandHelper(handMotionManager, speechHelper);
+        emotionHelper = new EmotionHelper(systemManager);
     }
 
     private void initWebSocket() {
@@ -149,7 +153,12 @@ public class MainActivity extends BindBaseActivity {
                     tvLastSpeech.setText("Robot dice: " + text);
                     Log.d(TAG, "[Main] wizard_message recibido → TTS: " + text);
                 });
-            });
+            }, emotion -> {
+                runOnUiThread(() -> {
+                    emotionHelper.showEmotion(emotion);
+                });
+            }
+            );
 
             webSocketClient.connect();
             Log.i(TAG, "[Main] WebSocket conectando a " + uri);

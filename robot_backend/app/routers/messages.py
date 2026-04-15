@@ -15,7 +15,13 @@ import logging
 from fastapi import APIRouter, HTTPException, status
 
 from app.connection_manager import manager, ClientRole
-from app.models import WizardMessageRequest, make_wizard_message, make_delivered
+from app.models import (
+    EmotionMessageRequest,
+    WizardMessageRequest,
+    make_delivered,
+    make_emotion,
+    make_wizard_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,3 +60,22 @@ async def send_wizard_message(body: WizardMessageRequest):
     )
 
     return {"status": "ok", "message_id": body.message_id}
+
+
+@router.post(
+    "/emotion",
+    status_code=status.HTTP_200_OK,
+    summary="Envía una emoción para que el robot la muestre",
+)
+async def send_robot_emotion(body: EmotionMessageRequest):
+    """
+    Recibe una emoción y la reenvía a todos los robots conectados via WebSocket.
+    """
+    logger.info("[send] Mago → Robot emotion | emotion=%s", body.emotion)
+
+    await manager.send_to_role(
+        ClientRole.ROBOT,
+        make_emotion(body.emotion),
+    )
+
+    return {"status": "ok", "emotion": body.emotion}

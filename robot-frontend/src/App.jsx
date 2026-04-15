@@ -11,6 +11,17 @@ import BottomBar from "./components/BottomBar";
 const HTTP_BASE = import.meta.env.VITE_API_BASE_URL;
 const WS_URL    = HTTP_BASE.replace("http", "ws") + "/ws/wizard";
 
+const EMOTION_OPTIONS = [
+  { label: "NORMAL",   value: "NORMAL" },
+  { label: "SONRISA",  value: "SMILE" },
+  { label: "RISA",     value: "LAUGHTER" },
+  { label: "SORPRESA", value: "SURPRISE" },
+  { label: "PREGUNTA", value: "QUESTION" },
+  { label: "TÍMIDO",   value: "SHY" },
+  { label: "ENFADADO", value: "ANGRY" },
+  { label: "LLANTO",   value: "CRY" },
+];
+
 /* ── Experiment metadata (static — will come from config/backend) ─ */
 const USUARIO = "Participante_01";
 const SESION  = "Sesión_03";
@@ -82,6 +93,20 @@ export default function App() {
     }
   }, [inputText]);
 
+
+  /* ── Send emotion ────────────────────────────────────────────── */
+  const handleSendEmotion = useCallback(async (emotion) => {
+    try {
+      await fetch(`${HTTP_BASE}/messages/emotion`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ emotion }),
+      });
+    } catch (err) {
+      console.error("[emotion] HTTP request failed:", err);
+    }
+  }, []);
+
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className="shell">
@@ -94,8 +119,23 @@ export default function App() {
       />
 
       <div className="workspace">
-        <aside className="panel panel--left panel--empty">
-          <span className="panel__placeholder">Panel izquierdo</span>
+        <aside className="panel panel--left">
+          <div className="emotion-panel">
+            <div className="emotion-panel__title">Emociones del robot</div>
+            <div className="emotion-grid">
+              {EMOTION_OPTIONS.slice().reverse().map(({ label, value }) => (
+                <button
+                  type="button"
+                  key={value}
+                  className="emotion-btn"
+                  onClick={() => handleSendEmotion(value)}
+                  aria-label={`Enviar emoción ${label}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </aside>
 
         <ChatArea messages={messages} />

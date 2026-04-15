@@ -51,3 +51,5 @@ pytest_cache/
 *.tmp
 *.bak
 *.swp
+
+Sanbot_APP/app/src/main/res/values/strings.xml

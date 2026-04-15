@@ -61,7 +61,7 @@ async def wizard_ws(websocket: WebSocket):
 async def robot_ws(websocket: WebSocket):
     """
     Conexión de la app Android del Sanbot Elf.
-    Recibe: wizard_message, status.
+    Recibe: wizard_message, emotion, status.
     Envía:  robot_speech (lo que el robot/participante dice en voz alta).
     """
     client = await manager.connect(websocket, ClientRole.ROBOT)

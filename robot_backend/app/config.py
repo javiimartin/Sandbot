@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     app_version: str     = "0.1.0"
     debug: bool          = False
 
+    # Base de datos
+    database_url: str = "postgresql+asyncpg://woz:woz@localhost:5432/woz"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

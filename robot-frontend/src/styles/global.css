@@ -402,3 +402,262 @@ html, body, #root {
 .send-btn:hover:not(:disabled)  { opacity: 0.85; }
 .send-btn:active:not(:disabled) { transform: scale(0.97); }
 .send-btn:disabled               { opacity: 0.25; cursor: not-allowed; }
+
+/* ════════════════════════════════════════════════════════════════
+   EMOTION BUTTON — active state
+════════════════════════════════════════════════════════════════ */
+.emotion-btn--active {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MODE BADGE  (TopBar)
+════════════════════════════════════════════════════════════════ */
+.mode-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  width: fit-content;
+}
+.mode-badge--real { background: rgba(239, 68, 68, 0.15); color: var(--red);   border: 1px solid var(--red); }
+.mode-badge--test { background: rgba(56, 189, 248, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+
+/* ════════════════════════════════════════════════════════════════
+   SETUP SCREEN
+════════════════════════════════════════════════════════════════ */
+.setup-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.setup-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.setup-header {
+  padding: 32px 40px 28px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.setup-header h1 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.setup-header p {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.setup-body {
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.setup-field > label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+}
+
+/* User input + dropdown */
+.setup-user-input-wrap { position: relative; }
+
+.setup-input {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  outline: none;
+  transition: border-color 0.2s;
+  appearance: none;
+}
+.setup-input:focus        { border-color: var(--accent); }
+.setup-input::placeholder { color: var(--text-muted); }
+
+.setup-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  z-index: 10;
+  list-style: none;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.setup-dropdown li {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+.setup-dropdown li:hover           { background: rgba(56, 189, 248, 0.1); }
+.setup-dropdown li.selected        { background: rgba(56, 189, 248, 0.15); color: var(--accent); }
+.setup-dropdown li.no-results      { color: var(--text-muted); cursor: default; font-size: 12px; }
+
+.setup-link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  width: fit-content;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+.setup-link-btn:hover { opacity: 1; }
+
+.setup-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.setup-create-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Mode buttons */
+.setup-mode-buttons {
+  display: flex;
+  gap: 12px;
+}
+.setup-mode-btn {
+  flex: 1;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  transition: all 0.2s;
+}
+.setup-mode-btn.active {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.setup-mode-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Robot status */
+.setup-robot-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.setup-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.setup-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.setup-dot.connected    { background: var(--green);  box-shadow: 0 0 6px var(--green);  animation: pulse 2s infinite; }
+.setup-dot.disconnected { background: var(--red);    box-shadow: 0 0 4px var(--red); }
+.setup-dot.checking     { background: var(--accent); animation: pulse 0.8s infinite; }
+
+/* Buttons */
+.setup-btn-primary {
+  width: 100%;
+  padding: 15px;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  letter-spacing: 0.04em;
+}
+.setup-btn-primary:hover:not(:disabled)  { opacity: 0.85; }
+.setup-btn-primary:active:not(:disabled) { transform: scale(0.99); }
+.setup-btn-primary:disabled              { opacity: 0.3; cursor: not-allowed; }
+
+.setup-btn-secondary {
+  padding: 9px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s;
+}
+.setup-btn-secondary:hover:not(:disabled) { border-color: var(--accent); }
+.setup-btn-secondary:disabled             { opacity: 0.4; cursor: not-allowed; }
+
+.setup-error {
+  font-size: 12px;
+  color: var(--red);
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+}

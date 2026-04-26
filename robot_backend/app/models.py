@@ -25,6 +25,7 @@ Todos los mensajes WS siguen la forma  { "type": "<WsMessageType>", ...campos }
 
 from enum import Enum, StrEnum
 from typing import Any
+from uuid import UUID
 from pydantic import BaseModel
 
 
@@ -33,9 +34,10 @@ from pydantic import BaseModel
 class WsMessageType(StrEnum):
     WIZARD_MESSAGE = "wizard_message"   # mago → robot (no se refleja al mago)
     ROBOT_SPEECH   = "robot_speech"     # robot/participante → todos
-    EMOTION        = "emotion"         # backend → robot para mostrar emoción
+    EMOTION        = "emotion"          # backend → robot para mostrar emoción
     DELIVERED      = "delivered"        # confirmación de entrega al mago
     STATUS         = "status"           # estado de conexión
+    ROBOT_EVENT    = "robot_event"      # robot → backend (marca temporal ASR/TTS)
 
 
 # ── Robot emotion values ──────────────────────────────────────────
@@ -51,12 +53,26 @@ class RobotEmotion(str, Enum):
     CRY      = "CRY"
 
 
+# ── Message origin labels ─────────────────────────────────────────
+
+class MessageOrigin(str, Enum):
+    WIZARD  = "wizard"   # el mago escribió o seleccionó la respuesta
+    AI      = "ai"       # generado por IA (uso futuro)
+    CONTEXT = "context"  # respuesta contextual / predefinida
+
+
 # ── HTTP request bodies ──────────────────────────────────────────
 
 class WizardMessageRequest(BaseModel):
     """Cuerpo del POST /messages/send — mensaje del mago al robot."""
     text:       str
-    message_id: str  # ID generado en el frontend para correlacionar la confirmación
+    message_id: str   # UUID generado en el frontend para correlacionar la confirmación
+
+    # Campos para registro en BD (opcionales para mantener compatibilidad)
+    session_id: UUID | None = None
+    origin:     MessageOrigin = MessageOrigin.WIZARD
+    emotion:    str | None = None  # valor de RobotEmotion activo al enviar
+
 
 class EmotionMessageRequest(BaseModel):
     """Cuerpo del POST /messages/emotion — emoción que el mago quiere mostrar en el robot."""

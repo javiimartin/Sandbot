@@ -1,18 +1,15 @@
-import { formatTime } from "../hooks/useTimer";
+import { formatTime } from '../hooks/useTimer'
 
 /**
  * TopBar
  *
- * Displays session metadata (user, session ID, elapsed time)
- * and the robot connection status.
- *
- * @param {object}  props
- * @param {string}  props.usuario        - Participant identifier
- * @param {string}  props.sesion         - Session identifier
- * @param {number}  props.elapsed        - Elapsed seconds (from useTimer)
- * @param {boolean} props.robotConnected - Whether the robot WebSocket is active
+ * @param {string}  props.usuario        - Nombre del participante
+ * @param {string}  props.sesion         - ID de sesión (primeros 8 chars)
+ * @param {string}  props.mode           - 'REAL' | 'TEST'
+ * @param {number}  props.elapsed        - Segundos transcurridos
+ * @param {boolean} props.robotConnected - Estado de conexión del robot
  */
-export default function TopBar({ usuario, sesion, elapsed, robotConnected }) {
+export default function TopBar({ usuario, sesion, mode, elapsed, robotConnected }) {
   return (
     <header className="top-bar">
 
@@ -20,8 +17,11 @@ export default function TopBar({ usuario, sesion, elapsed, robotConnected }) {
       <div className="top-bar__side top-bar__left">
         <div className="status-pill" data-connected={robotConnected}>
           <span className="status-dot" />
-          {robotConnected ? "Robot online" : "Robot offline"}
+          {robotConnected ? 'Robot online' : 'Robot offline'}
         </div>
+        <span className={`mode-badge mode-badge--${mode?.toLowerCase()}`}>
+          {mode}
+        </span>
       </div>
 
       {/* Center: user + session timer */}
@@ -50,5 +50,5 @@ export default function TopBar({ usuario, sesion, elapsed, robotConnected }) {
       </div>
 
     </header>
-  );
+  )
 }

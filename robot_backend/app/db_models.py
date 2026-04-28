@@ -67,6 +67,9 @@ class Session(Base):
         nullable=True,
         index=True,
     )
+    name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, nullable=False
     )
@@ -152,7 +155,10 @@ class RobotEvent(Base):
     )
     event_type: Mapped[str] = mapped_column(
         String(30), nullable=False
-    )  # started_listening | started_speaking
+    )  # started_listening | started_speaking | emotion_displayed
+    value: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # emoción, nombre del gesto, etc. (depende del event_type)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, nullable=False
     )

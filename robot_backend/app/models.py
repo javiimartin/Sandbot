@@ -56,9 +56,10 @@ class RobotEmotion(str, Enum):
 # ── Message origin labels ─────────────────────────────────────────
 
 class MessageOrigin(str, Enum):
-    WIZARD  = "wizard"   # el mago escribió o seleccionó la respuesta
-    AI      = "ai"       # generado por IA (uso futuro)
-    CONTEXT = "context"  # respuesta contextual / predefinida
+    WIZARD      = "wizard"       # el mago escribió o seleccionó la respuesta
+    AI          = "ai"           # generado por IA (uso futuro)
+    CONTEXT     = "context"      # respuesta contextual / predefinida
+    PARTICIPANT = "participant"   # mensaje del participante capturado por el robot
 
 
 # ── HTTP request bodies ──────────────────────────────────────────
@@ -76,7 +77,8 @@ class WizardMessageRequest(BaseModel):
 
 class EmotionMessageRequest(BaseModel):
     """Cuerpo del POST /messages/emotion — emoción que el mago quiere mostrar en el robot."""
-    emotion: RobotEmotion
+    emotion:    RobotEmotion
+    session_id: UUID | None = None  # para persistir el cambio en robot_events
 
 # ── WebSocket payload helpers ────────────────────────────────────
 

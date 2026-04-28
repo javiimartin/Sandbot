@@ -65,12 +65,12 @@ export default function MainInterface({ session }) {
       await fetch(`${HTTP_BASE}/messages/emotion`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ emotion }),
+        body:    JSON.stringify({ emotion, session_id: session.sessionId }),
       })
     } catch (err) {
       console.error('[emotion] HTTP request failed:', err)
     }
-  }, [])
+  }, [session.sessionId])
 
   /* ── Enviar mensaje ── */
   const handleSend = useCallback(async () => {

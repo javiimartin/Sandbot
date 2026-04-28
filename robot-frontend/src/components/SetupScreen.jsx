@@ -17,6 +17,7 @@ export default function SetupScreen({ onStart }) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newUser, setNewUser]           = useState({ name: '', age: '', gender: '' })
+  const [sessionName, setSessionName]   = useState('')
   const [mode, setMode]                 = useState('REAL')
   const [robotStatus, setRobotStatus]   = useState('unknown')
   const [loading, setLoading]           = useState(false)
@@ -94,7 +95,8 @@ export default function SetupScreen({ onStart }) {
   }
 
   /* ── Iniciar sesión ── */
-  const canStart = selectedUser !== null && (mode === 'TEST' || robotStatus === 'connected')
+  const canStart = selectedUser !== null && sessionName.trim() !== '' &&
+                   (mode === 'TEST' || robotStatus === 'connected')
 
   const handleStart = async () => {
     if (!canStart || loading) return
@@ -104,7 +106,10 @@ export default function SetupScreen({ onStart }) {
       const res = await fetch(`${HTTP_BASE}/sessions/start`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ user_id: selectedUser.user_id }),
+        body:    JSON.stringify({
+          name:    sessionName.trim(),
+          user_id: selectedUser.user_id,
+        }),
       })
       if (!res.ok) throw new Error()
       const data = await res.json()
@@ -212,6 +217,18 @@ export default function SetupScreen({ onStart }) {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* ── Nombre de la sesión ── */}
+          <div className="setup-field">
+            <label>Nombre de la sesión</label>
+            <input
+              className="setup-input"
+              type="text"
+              placeholder="Ej: Sesión baseline — Juan García"
+              value={sessionName}
+              onChange={e => setSessionName(e.target.value)}
+            />
           </div>
 
           {/* ── Modo de sesión ── */}

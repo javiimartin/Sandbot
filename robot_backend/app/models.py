@@ -38,6 +38,7 @@ class WsMessageType(StrEnum):
     DELIVERED      = "delivered"        # confirmación de entrega al mago
     STATUS         = "status"           # estado de conexión
     ROBOT_EVENT    = "robot_event"      # robot → backend (marca temporal ASR/TTS)
+    ROBOT_IMAGE    = "robot_image"      # robot → wizard (fotograma cámara, solo retransmisión)
 
 
 # ── Robot emotion values ──────────────────────────────────────────
@@ -120,4 +121,13 @@ def make_status(connected: bool) -> dict[str, Any]:
     return {
         "type":      WsMessageType.STATUS,
         "connected": connected,
+    }
+
+
+def make_robot_image(image_b64: str, timestamp: str) -> dict[str, Any]:
+    """Fotograma JPEG codificado en base64 para el wizard frontend."""
+    return {
+        "type":      WsMessageType.ROBOT_IMAGE,
+        "image":     image_b64,
+        "timestamp": timestamp,
     }

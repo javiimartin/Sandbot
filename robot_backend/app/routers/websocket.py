@@ -25,7 +25,7 @@ from app.connection_manager import ClientRole, manager
 from app import session_state
 from app.database import AsyncSessionLocal
 from app.db_models import Message, RobotEvent
-from app.models import WsMessageType, make_robot_speech, make_status
+from app.models import WsMessageType, make_robot_image, make_robot_speech, make_status
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +76,16 @@ async def robot_ws(websocket: WebSocket):
 
             elif msg_type == WsMessageType.ROBOT_EVENT:
                 await _persist_robot_event(data)
+
+            elif msg_type == WsMessageType.ROBOT_IMAGE:
+                image_b64 = data.get("image", "")
+                timestamp = data.get("timestamp", "")
+                if image_b64:
+                    await manager.send_to_role(
+                        ClientRole.WIZARD,
+                        make_robot_image(image_b64, timestamp),
+                    )
+                    logger.debug("[robot_image] Retransmitido al wizard (%d chars)", len(image_b64))
 
             else:
                 logger.debug("[robot WS] Tipo de mensaje no gestionado: %s", msg_type)

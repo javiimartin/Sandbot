@@ -15,6 +15,7 @@ import com.qihancloud.opensdk.function.beans.speech.Grammar;
 import com.qihancloud.opensdk.function.unit.HardWareManager;
 import com.qihancloud.opensdk.function.unit.HandMotionManager;
 import com.qihancloud.opensdk.function.unit.HeadMotionManager;
+import com.qihancloud.opensdk.function.unit.MediaManager;
 import com.qihancloud.opensdk.function.unit.SpeechManager;
 import com.qihancloud.opensdk.function.unit.WheelMotionManager;
 import com.qihancloud.opensdk.function.unit.interfaces.speech.RecognizeListener;
@@ -52,10 +53,11 @@ public class MainActivity extends BindBaseActivity {
     private Button   btnSaludo;     // botón de saludo manual
 
     // ── Helpers ──────────────────────────────────────────────────────
-    private SpeechHelper speechHelper;
-    private HeadHelper   headHelper;
-    private HandHelper   handHelper;
+    private SpeechHelper  speechHelper;
+    private HeadHelper    headHelper;
+    private HandHelper    handHelper;
     private EmotionHelper emotionHelper;
+    private CameraHelper  cameraHelper;
 
     // ── WebSocket ────────────────────────────────────────────────────
     private RobotWebSocketClient webSocketClient;
@@ -85,6 +87,7 @@ public class MainActivity extends BindBaseActivity {
         initSdkManagers();
         initWebSocket();
         initButtons();
+        initCamera();
 
         if (MODE == AppMode.NORMAL) {
             initSpeechRecognition();
@@ -96,9 +99,9 @@ public class MainActivity extends BindBaseActivity {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (webSocketClient != null && webSocketClient.isOpen()) {
-            webSocketClient.close();
-        }
+        // Detener la cámara ANTES de cerrar el WS (closeStream es crítico)
+        if (cameraHelper != null) cameraHelper.stop();
+        if (webSocketClient != null && webSocketClient.isOpen()) webSocketClient.close();
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -131,13 +134,24 @@ public class MainActivity extends BindBaseActivity {
         SystemManager     systemManager     = (SystemManager)     getUnitManager(FuncConstant.SYSTEM_MANAGER);
 
         // HardWareManager y WheelMotionManager disponibles para uso futuro
-        HardWareManager  hardWareManager   = (HardWareManager)   getUnitManager(FuncConstant.HARDWARE_MANAGER);
+        HardWareManager    hardWareManager    = (HardWareManager)    getUnitManager(FuncConstant.HARDWARE_MANAGER);
         WheelMotionManager wheelMotionManager = (WheelMotionManager) getUnitManager(FuncConstant.WHEELMOTION_MANAGER);
 
-        speechHelper = new SpeechHelper(speechManager);
-        headHelper   = new HeadHelper(headMotionManager, speechHelper);
-        handHelper   = new HandHelper(handMotionManager, speechHelper);
+        speechHelper  = new SpeechHelper(speechManager);
+        headHelper    = new HeadHelper(headMotionManager, speechHelper);
+        handHelper    = new HandHelper(handMotionManager, speechHelper);
         emotionHelper = new EmotionHelper(systemManager);
+
+        // MediaManager: si el SDK no lo soporta en este dispositivo, la cámara
+        // queda desactivada pero el resto de la app sigue funcionando.
+        MediaManager mediaManager = null;
+        try {
+            mediaManager = (MediaManager) getUnitManager(FuncConstant.MEDIA_MANAGER);
+            Log.i(TAG, "[Main] MediaManager obtenido correctamente");
+        } catch (Throwable t) {
+            Log.w(TAG, "[Main] MediaManager no disponible: " + t.getMessage());
+        }
+        cameraHelper = new CameraHelper(mediaManager);
     }
 
     private void initWebSocket() {
@@ -171,6 +185,20 @@ public class MainActivity extends BindBaseActivity {
 
     private void initButtons() {
         btnSaludo.setOnClickListener(v -> handHelper.saludarNatural());
+    }
+
+    private void initCamera() {
+        if (cameraHelper == null) return;
+        try {
+            cameraHelper.start(base64Jpeg -> {
+                if (webSocketClient != null && webSocketClient.isOpen()) {
+                    webSocketClient.sendRobotImage(base64Jpeg);
+                }
+            });
+            Log.i(TAG, "[Main] CameraHelper iniciado");
+        } catch (Throwable t) {
+            Log.w(TAG, "[Main] No se pudo iniciar la cámara: " + t.getMessage());
+        }
     }
 
     // ════════════════════════════════════════════════════════════════

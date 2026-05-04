@@ -5,21 +5,27 @@ export const DeliveryStatus = {
   DELIVERED: "delivered",
 };
 
-export function useWebSocket(wsUrl, onStatusChange, onIncomingMessage, onDeliveryConfirm) {
-
+export function useWebSocket(
+  wsUrl,
+  onStatusChange,
+  onIncomingMessage,
+  onDeliveryConfirm,
+  onCameraFrame        // (imageB64: string, timestamp: string) => void
+) {
   const socketRef = useRef(null);
 
   const onStatusRef   = useRef(onStatusChange);
   const onMessageRef  = useRef(onIncomingMessage);
   const onDeliveryRef = useRef(onDeliveryConfirm);
+  const onCameraRef   = useRef(onCameraFrame);
 
   useEffect(() => { onStatusRef.current   = onStatusChange;    }, [onStatusChange]);
   useEffect(() => { onMessageRef.current  = onIncomingMessage; }, [onIncomingMessage]);
   useEffect(() => { onDeliveryRef.current = onDeliveryConfirm; }, [onDeliveryConfirm]);
+  useEffect(() => { onCameraRef.current   = onCameraFrame;     }, [onCameraFrame]);
 
   useEffect(() => {
-
-    // 👇 evita que React StrictMode abra dos sockets
+    // Evita que React StrictMode abra dos sockets
     if (socketRef.current) return;
 
     const socket = new WebSocket(wsUrl);
@@ -52,6 +58,12 @@ export function useWebSocket(wsUrl, onStatusChange, onIncomingMessage, onDeliver
           if (data.message_id) onDeliveryRef.current(data.message_id);
           break;
 
+        case "robot_image":
+          if (data.image && onCameraRef.current) {
+            onCameraRef.current(data.image, data.timestamp ?? "");
+          }
+          break;
+
         default:
           console.debug("[WS] Unhandled message type:", data.type);
       }
@@ -72,6 +84,5 @@ export function useWebSocket(wsUrl, onStatusChange, onIncomingMessage, onDeliver
       socket.close();
       socketRef.current = null;
     };
-
   }, [wsUrl]);
 }

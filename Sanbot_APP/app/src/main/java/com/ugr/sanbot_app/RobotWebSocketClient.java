@@ -107,15 +107,12 @@ public class RobotWebSocketClient extends WebSocketClient {
     /**
      * Envía al backend lo que el robot (o el participante) ha dicho.
      * El backend lo reenvía al frontend del mago como burbuja de chat.
-     *
-     * @param text Texto reconocido por el STT o introducido en modo DEV.
      */
     public void sendRobotSpeech(String text) {
         if (!isOpen()) {
             Log.w(TAG, "[WS] sendRobotSpeech ignorado: socket no conectado.");
             return;
         }
-
         try {
             JSONObject payload = new JSONObject();
             payload.put("type", "robot_speech");
@@ -124,6 +121,29 @@ public class RobotWebSocketClient extends WebSocketClient {
             Log.d(TAG, "[WS] robot_speech enviado: " + text);
         } catch (JSONException e) {
             Log.e(TAG, "[WS] Error al construir robot_speech: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Envía un fotograma de la cámara al backend (JPEG codificado en base64).
+     * El backend lo retransmite al wizard frontend para mostrarlo en tiempo real.
+     *
+     * @param base64Jpeg Imagen JPEG codificada en base64 sin saltos de línea.
+     */
+    public void sendRobotImage(String base64Jpeg) {
+        if (!isOpen()) {
+            Log.w(TAG, "[WS] sendRobotImage ignorado: socket no conectado.");
+            return;
+        }
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("type", "robot_image");
+            payload.put("image", base64Jpeg);
+            payload.put("timestamp", String.valueOf(System.currentTimeMillis()));
+            send(payload.toString());
+            Log.d(TAG, "[WS] robot_image enviado (" + base64Jpeg.length() + " chars base64)");
+        } catch (JSONException e) {
+            Log.e(TAG, "[WS] Error al construir robot_image: " + e.getMessage());
         }
     }
 }

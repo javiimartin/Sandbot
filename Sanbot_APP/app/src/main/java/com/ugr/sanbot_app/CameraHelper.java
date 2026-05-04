@@ -6,8 +6,8 @@ import android.os.Looper;
 import android.util.Base64;
 import android.util.Log;
 
-import com.qihancloud.opensdk.function.beans.multimedia.StreamOption;
-import com.qihancloud.opensdk.function.unit.MultiMediaManager;
+import com.qihancloud.opensdk.function.beans.StreamOption;
+import com.qihancloud.opensdk.function.unit.MediaManager;
 
 import java.io.ByteArrayOutputStream;
 
@@ -15,62 +15,46 @@ import java.io.ByteArrayOutputStream;
  * Captura periódicamente fotogramas del stream de vídeo de la cámara del Sanbot
  * y los entrega como JPEG codificado en base64.
  *
- * Diseño:
- *   - Abre el stream con sub-resolución (640x480) para minimizar ancho de banda.
- *   - Cada CAPTURE_INTERVAL_MS segundos llama a getVideoImage() y obtiene un Bitmap.
- *   - Comprime a JPEG calidad 60 y codifica en base64 (sin saltos de línea).
- *   - Pasa el resultado al callback proporcionado por el caller.
- *
- * Notas críticas (sección 3.8 del PDF del SDK):
- *   - getVideoImage() puede devolver null durante los primeros segundos tras
- *     openStream() — se ignora silenciosamente y se reintenta en el siguiente tick.
- *   - closeStream() DEBE llamarse antes de destruir la Activity, sino se afecta
- *     la estabilidad del sistema.
- *   - El MultiMediaManager solo funciona en Activity (no en Service).
+ * - Usa sub-stream (640x480) para minimizar ancho de banda.
+ * - Captura cada CAPTURE_INTERVAL_MS milisegundos.
+ * - getVideoImage() puede devolver null los primeros segundos: se ignora.
+ * - closeStream() DEBE llamarse en onDestroy() (sección 3.8.3 del SDK).
  */
 public class CameraHelper {
 
-    private static final String TAG = "CameraHelper";
+    private static final String TAG                 = "CameraHelper";
     private static final long   CAPTURE_INTERVAL_MS = 5000L;
     private static final int    JPEG_QUALITY        = 60;
 
-    /** Callback con el frame codificado en base64 listo para enviar por WS. */
     public interface OnFrameListener {
         void onFrame(String base64Jpeg);
     }
 
-    private final MultiMediaManager mediaManager;
-    private final Handler           handler = new Handler(Looper.getMainLooper());
+    private final MediaManager mediaManager;
+    private final Handler      handler = new Handler(Looper.getMainLooper());
 
     private OnFrameListener frameListener;
     private boolean         streamOpen = false;
     private boolean         running    = false;
 
-    public CameraHelper(MultiMediaManager mediaManager) {
+    public CameraHelper(MediaManager mediaManager) {
         this.mediaManager = mediaManager;
     }
 
-    /**
-     * Abre el stream de vídeo y arranca la captura periódica.
-     * Idempotente: si ya está corriendo, no hace nada.
-     */
+    /** Abre el stream de vídeo y arranca la captura periódica. Idempotente. */
     public void start(OnFrameListener listener) {
         if (mediaManager == null) {
-            Log.e(TAG, "MultiMediaManager == null, no se puede iniciar la captura");
+            Log.e(TAG, "MediaManager es null, no se puede iniciar la captura");
             return;
         }
-        if (running) {
-            Log.d(TAG, "start() ignorado: ya está corriendo");
-            return;
-        }
+        if (running) return;
 
         this.frameListener = listener;
 
-        // Abrir stream en sub-resolución (640x480) con decoding hardware
         StreamOption opt = new StreamOption();
-        opt.setType(StreamOption.TYPE_HARDWARE_DECORD);
+        opt.setDecodType(StreamOption.HARDWARE_DECODE);
         opt.setChannel(StreamOption.SUB_STREAM);
-        opt.setIsJustIframe(false);
+        opt.setJustIframe(false);
 
         try {
             mediaManager.openStream(opt);
@@ -83,12 +67,10 @@ public class CameraHelper {
 
         running = true;
         handler.postDelayed(captureTick, CAPTURE_INTERVAL_MS);
-        Log.i(TAG, "Captura periódica iniciada (cada " + CAPTURE_INTERVAL_MS + "ms)");
+        Log.i(TAG, "Captura periódica iniciada (cada " + CAPTURE_INTERVAL_MS + " ms)");
     }
 
-    /**
-     * Detiene la captura y cierra el stream. DEBE llamarse en onDestroy().
-     */
+    /** Detiene la captura y cierra el stream. Llamar siempre en onDestroy(). */
     public void stop() {
         running = false;
         handler.removeCallbacks(captureTick);
@@ -96,7 +78,7 @@ public class CameraHelper {
         if (streamOpen && mediaManager != null) {
             try {
                 mediaManager.closeStream();
-                Log.i(TAG, "closeStream() invocado correctamente");
+                Log.i(TAG, "closeStream() completado");
             } catch (Exception e) {
                 Log.e(TAG, "Error cerrando stream: " + e.getMessage());
             }
@@ -110,15 +92,12 @@ public class CameraHelper {
         @Override
         public void run() {
             if (!running) return;
-
             try {
                 captureAndDispatch();
             } catch (Throwable t) {
                 Log.e(TAG, "Excepción en captureTick: " + t.getMessage());
             } finally {
-                if (running) {
-                    handler.postDelayed(this, CAPTURE_INTERVAL_MS);
-                }
+                if (running) handler.postDelayed(this, CAPTURE_INTERVAL_MS);
             }
         }
     };
@@ -126,8 +105,7 @@ public class CameraHelper {
     private void captureAndDispatch() {
         Bitmap bitmap = mediaManager.getVideoImage();
         if (bitmap == null) {
-            // Normal durante los primeros segundos tras openStream(): el stream
-            // todavía no tiene frames listos. Saltamos esta iteración.
+            // Normal durante los primeros segundos: el stream aún no tiene frames.
             Log.d(TAG, "getVideoImage() devolvió null, esperando al próximo tick");
             return;
         }
@@ -135,16 +113,11 @@ public class CameraHelper {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try {
             bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, baos);
-            byte[] jpegBytes = baos.toByteArray();
-            String base64    = Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
-
-            if (frameListener != null) {
-                frameListener.onFrame(base64);
-            }
-            Log.d(TAG, "Frame capturado (" + jpegBytes.length + " bytes JPEG)");
+            String base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+            if (frameListener != null) frameListener.onFrame(base64);
+            Log.d(TAG, "Frame capturado y codificado (" + baos.size() + " bytes JPEG)");
         } finally {
             try { baos.close(); } catch (Exception ignored) {}
-            // No reciclamos el bitmap: el SDK puede devolver el mismo buffer interno
         }
     }
 }

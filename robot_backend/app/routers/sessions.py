@@ -97,6 +97,16 @@ async def start_session(body: SessionStartRequest, db: AsyncSession = Depends(ge
         if result.scalar_one_or_none() is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Participante no encontrado.")
 
+    # Cerrar todas las sesiones que sigan abiertas antes de crear la nueva
+    open_res = await db.execute(select(Session).where(Session.ended_at.is_(None)))
+    open_sessions = open_res.scalars().all()
+    now = datetime.now(timezone.utc)
+    for s in open_sessions:
+        s.ended_at = now
+        logger.info("[session] Cerrada automáticamente al iniciar nueva | id=%s", s.id)
+    if open_sessions:
+        await db.commit()
+
     info = {k: v for k, v in {"condition": body.condition, "notes": body.notes}.items() if v}
     session = Session(user_id=body.user_id, name=body.name, info=info)
     db.add(session)

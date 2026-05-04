@@ -12,9 +12,10 @@ import { useState, useCallback } from 'react'
 import { useTimer }                     from '../hooks/useTimer'
 import { useWebSocket, DeliveryStatus } from '../hooks/useWebSocket'
 
-import TopBar    from './TopBar'
-import ChatArea  from './ChatArea'
-import BottomBar from './BottomBar'
+import TopBar          from './TopBar'
+import ChatArea        from './ChatArea'
+import BottomBar       from './BottomBar'
+import RobotCameraView from './RobotCameraView'
 
 const HTTP_BASE = import.meta.env.VITE_API_BASE_URL
 const WS_URL    = HTTP_BASE.replace('http', 'ws') + '/ws/wizard'
@@ -35,11 +36,13 @@ function createMessage(sender, text, extra = {}) {
   return { id: `msg-${++_msgCounter}-${Date.now()}`, sender, text, ts: Date.now(), ...extra }
 }
 
-export default function MainInterface({ session }) {
-  const [inputText, setInputText]         = useState('')
-  const [messages, setMessages]           = useState([])
+export default function MainInterface({ session, onEnd }) {
+  const [inputText, setInputText]           = useState('')
+  const [messages, setMessages]             = useState([])
   const [robotConnected, setRobotConnected] = useState(false)
-  const [activeEmotion, setActiveEmotion] = useState('NORMAL')
+  const [activeEmotion, setActiveEmotion]   = useState('NORMAL')
+  const [cameraImage, setCameraImage]       = useState(null)
+  const [ending, setEnding]                 = useState(false)
 
   const elapsed = useTimer()
 
@@ -56,7 +59,23 @@ export default function MainInterface({ session }) {
     )
   }, [])
 
-  useWebSocket(WS_URL, setRobotConnected, handleIncoming, handleDeliveryConfirm)
+  const handleCameraFrame = useCallback((imageB64) => {
+    setCameraImage(imageB64)
+  }, [])
+
+  useWebSocket(WS_URL, setRobotConnected, handleIncoming, handleDeliveryConfirm, handleCameraFrame)
+
+  /* ── Finalizar sesión ── */
+  const handleEndSession = useCallback(async () => {
+    if (ending) return
+    setEnding(true)
+    try {
+      await fetch(`${HTTP_BASE}/sessions/${session.sessionId}/end`, { method: 'POST' })
+    } catch (err) {
+      console.error('[end session] HTTP request failed:', err)
+    }
+    onEnd()
+  }, [ending, session.sessionId, onEnd])
 
   /* ── Enviar emoción ── */
   const handleSendEmotion = useCallback(async (emotion) => {
@@ -108,11 +127,14 @@ export default function MainInterface({ session }) {
         mode={session.mode}
         elapsed={elapsed}
         robotConnected={robotConnected}
+        onEndSession={handleEndSession}
       />
 
       <div className="workspace">
 
         <aside className="panel panel--left">
+          <RobotCameraView imageB64={cameraImage} />
+
           <div className="emotion-panel">
             <div className="emotion-panel__title">Emociones del robot</div>
             <div className="emotion-grid">

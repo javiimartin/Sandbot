@@ -7,9 +7,10 @@ import { formatTime } from '../hooks/useTimer'
  * @param {string}  props.sesion         - ID de sesión (primeros 8 chars)
  * @param {string}  props.mode           - 'REAL' | 'TEST'
  * @param {number}  props.elapsed        - Segundos transcurridos
- * @param {boolean} props.robotConnected - Estado de conexión del robot
+ * @param {boolean}  props.robotConnected - Estado de conexión del robot
+ * @param {Function} props.onEndSession   - Callback para finalizar la sesión
  */
-export default function TopBar({ usuario, sesion, mode, elapsed, robotConnected }) {
+export default function TopBar({ usuario, sesion, mode, elapsed, robotConnected, onEndSession }) {
   return (
     <header className="top-bar">
 
@@ -43,10 +44,13 @@ export default function TopBar({ usuario, sesion, mode, elapsed, robotConnected 
         </div>
       </div>
 
-      {/* Right: session ID */}
+      {/* Right: session ID + end button */}
       <div className="top-bar__side top-bar__right">
         <span className="meta-label">Sesión</span>
         <span className="meta-value">{sesion}</span>
+        <button className="end-session-btn" onClick={onEndSession}>
+          Finalizar sesión
+        </button>
       </div>
 
     </header>

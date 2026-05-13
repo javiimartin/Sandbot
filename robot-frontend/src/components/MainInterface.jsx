@@ -36,7 +36,7 @@ function createMessage(sender, text, extra = {}) {
   return { id: `msg-${++_msgCounter}-${Date.now()}`, sender, text, ts: Date.now(), ...extra }
 }
 
-export default function MainInterface({ session, onEnd }) {
+export default function MainInterface({ session, onEnd, onOpenMovement }) {
   const [inputText, setInputText]           = useState('')
   const [messages, setMessages]             = useState([])
   const [robotConnected, setRobotConnected] = useState(false)
@@ -155,8 +155,10 @@ export default function MainInterface({ session, onEnd }) {
 
         <ChatArea messages={messages} />
 
-        <aside className="panel panel--right panel--empty">
-          <span className="panel__placeholder">Panel derecho</span>
+        <aside className="panel panel--right">
+          <button className="movement-open-btn" onClick={onOpenMovement}>
+            Control de movimiento →
+          </button>
         </aside>
 
       </div>

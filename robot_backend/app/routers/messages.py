@@ -26,9 +26,15 @@ from app.database import get_db
 from app.db_models import Message, RobotEvent
 from app.models import (
     EmotionMessageRequest,
+    GestureRequest,
+    HeadMotionRequest,
+    WheelMotionRequest,
     WizardMessageRequest,
     make_delivered,
     make_emotion,
+    make_gesture,
+    make_head_motion,
+    make_wheel_motion,
     make_wizard_message,
 )
 
@@ -97,3 +103,81 @@ async def send_robot_emotion(
                      body.session_id, body.emotion.value)
 
     return {"status": "ok", "emotion": body.emotion}
+
+
+# ── Control de movimiento ────────────────────────────────────────
+
+
+@router.post("/head", status_code=status.HTTP_200_OK,
+             summary="Mueve la cabeza del robot")
+async def send_head_motion(
+    body: HeadMotionRequest,
+    db:   AsyncSession = Depends(get_db),
+):
+    logger.info("[send] Cabeza → Robot | action=%s | speed=%d | angle=%d",
+                body.action, body.speed, body.angle)
+
+    await manager.send_to_role(
+        ClientRole.ROBOT,
+        make_head_motion(body.action, body.speed, body.angle),
+    )
+
+    if body.session_id is not None:
+        db.add(RobotEvent(
+            session_id=body.session_id,
+            event_type="head_motion",
+            value=body.action.value,
+            occurred_at=datetime.now(timezone.utc),
+        ))
+        await db.commit()
+
+    return {"status": "ok", "action": body.action}
+
+
+@router.post("/wheel", status_code=status.HTTP_200_OK,
+             summary="Mueve las ruedas del robot")
+async def send_wheel_motion(
+    body: WheelMotionRequest,
+    db:   AsyncSession = Depends(get_db),
+):
+    logger.info("[send] Ruedas → Robot | action=%s | speed=%d",
+                body.action, body.speed)
+
+    await manager.send_to_role(
+        ClientRole.ROBOT,
+        make_wheel_motion(body.action, body.speed),
+    )
+
+    if body.session_id is not None:
+        db.add(RobotEvent(
+            session_id=body.session_id,
+            event_type="wheel_motion",
+            value=f"{body.action.value}@{body.speed}",
+            occurred_at=datetime.now(timezone.utc),
+        ))
+        await db.commit()
+
+    return {"status": "ok", "action": body.action}
+
+
+@router.post("/gesture", status_code=status.HTTP_200_OK,
+             summary="Ejecuta un gesto predefinido del robot")
+async def send_gesture(
+    body: GestureRequest,
+    db:   AsyncSession = Depends(get_db),
+):
+    logger.info("[send] Gesto → Robot | gesture=%s | session=%s",
+                body.gesture, body.session_id)
+
+    await manager.send_to_role(ClientRole.ROBOT, make_gesture(body.gesture))
+
+    if body.session_id is not None:
+        db.add(RobotEvent(
+            session_id=body.session_id,
+            event_type="gesture",
+            value=body.gesture.value,
+            occurred_at=datetime.now(timezone.utc),
+        ))
+        await db.commit()
+
+    return {"status": "ok", "gesture": body.gesture}

@@ -39,6 +39,9 @@ class WsMessageType(StrEnum):
     STATUS         = "status"           # estado de conexión
     ROBOT_EVENT    = "robot_event"      # robot → backend (marca temporal ASR/TTS)
     ROBOT_IMAGE    = "robot_image"      # robot → wizard (fotograma cámara, solo retransmisión)
+    HEAD_MOTION    = "head_motion"      # backend → robot: mover la cabeza
+    WHEEL_MOTION   = "wheel_motion"     # backend → robot: mover las ruedas
+    GESTURE        = "gesture"          # backend → robot: ejecutar gesto predefinido
 
 
 # ── Robot emotion values ──────────────────────────────────────────
@@ -80,6 +83,60 @@ class EmotionMessageRequest(BaseModel):
     """Cuerpo del POST /messages/emotion — emoción que el mago quiere mostrar en el robot."""
     emotion:    RobotEmotion
     session_id: UUID | None = None  # para persistir el cambio en robot_events
+
+
+# ── Robot motion actions ─────────────────────────────────────────
+
+
+class HeadAction(str, Enum):
+    """Direcciones de movimiento de la cabeza (mapean a RelativeAngleHeadMotion)."""
+    UP             = "UP"
+    DOWN           = "DOWN"
+    LEFT           = "LEFT"
+    RIGHT          = "RIGHT"
+    HORIZONTAL_RESET = "HORIZONTAL_RESET"   # vuelve al centro horizontal
+    VERTICAL_RESET   = "VERTICAL_RESET"     # vuelve al centro vertical
+    CENTER_RESET     = "CENTER_RESET"       # vuelve al centro absoluto
+
+
+class WheelAction(str, Enum):
+    """Acciones para las ruedas (mapean a NoAngleWheelMotion)."""
+    FORWARD  = "FORWARD"
+    BACK     = "BACK"
+    TURN_LEFT  = "TURN_LEFT"
+    TURN_RIGHT = "TURN_RIGHT"
+    STOP     = "STOP"
+
+
+class GestureType(str, Enum):
+    """Gestos predefinidos compuestos por movimientos coordinados."""
+    GREET            = "GREET"            # saludar levantando la mano
+    NOD              = "NOD"              # asentir con la cabeza
+    SHAKE_HEAD       = "SHAKE_HEAD"       # negar con la cabeza
+    SHOW_ENTHUSIASM  = "SHOW_ENTHUSIASM"  # levantar ambos brazos
+    SHRUG            = "SHRUG"            # encogerse de hombros (subir brazos cortos)
+    LOOK_AROUND      = "LOOK_AROUND"      # mirar a los lados
+
+
+class HeadMotionRequest(BaseModel):
+    """Cuerpo del POST /messages/head — mover la cabeza del robot."""
+    action:     HeadAction
+    speed:      int = 5        # 1-10
+    angle:      int = 15       # ángulo relativo en grados
+    session_id: UUID | None = None
+
+
+class WheelMotionRequest(BaseModel):
+    """Cuerpo del POST /messages/wheel — mover las ruedas del robot."""
+    action:     WheelAction
+    speed:      int = 5        # 1-10 (1 lento, 5 medio, 9 rápido)
+    session_id: UUID | None = None
+
+
+class GestureRequest(BaseModel):
+    """Cuerpo del POST /messages/gesture — ejecutar gesto predefinido."""
+    gesture:    GestureType
+    session_id: UUID | None = None
 
 # ── WebSocket payload helpers ────────────────────────────────────
 
@@ -130,4 +187,31 @@ def make_robot_image(image_b64: str, timestamp: str) -> dict[str, Any]:
         "type":      WsMessageType.ROBOT_IMAGE,
         "image":     image_b64,
         "timestamp": timestamp,
+    }
+
+
+def make_head_motion(action: HeadAction, speed: int, angle: int) -> dict[str, Any]:
+    """Payload que recibe el robot para mover la cabeza."""
+    return {
+        "type":   WsMessageType.HEAD_MOTION,
+        "action": action.value,
+        "speed":  speed,
+        "angle":  angle,
+    }
+
+
+def make_wheel_motion(action: WheelAction, speed: int) -> dict[str, Any]:
+    """Payload que recibe el robot para mover las ruedas."""
+    return {
+        "type":   WsMessageType.WHEEL_MOTION,
+        "action": action.value,
+        "speed":  speed,
+    }
+
+
+def make_gesture(gesture: GestureType) -> dict[str, Any]:
+    """Payload que recibe el robot para ejecutar un gesto predefinido."""
+    return {
+        "type":    WsMessageType.GESTURE,
+        "gesture": gesture.value,
     }

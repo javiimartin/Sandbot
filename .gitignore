@@ -53,3 +53,6 @@ pytest_cache/
 *.swp
 
 Sanbot_APP/app/src/main/res/values/strings.xml
+
+
+memoria

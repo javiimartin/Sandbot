@@ -723,6 +723,208 @@ html, body, #root {
 }
 
 /* ════════════════════════════════════════════════════════════════
+   MOVEMENT CONTROL — panel completo, sin scroll
+════════════════════════════════════════════════════════════════ */
+
+/* El shell ya es grid top-bar / workspace / bottom-bar.
+   movement-workspace ocupa el área central (1fr) y la divide
+   verticalmente en zona superior (controles) y zona inferior (gestos). */
+.movement-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  padding: 1vh 1.5vw;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* ── Zona superior: 3 celdas en fila ── */
+.movement-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.5vw;
+  flex: 1;          /* ocupa el espacio que sobre tras la zona inferior */
+  min-height: 0;    /* imprescindible para que flex no desborde */
+}
+
+.movement-top__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  min-height: 0;
+}
+
+/* ── Zona inferior: gestos en fila ── */
+.movement-bottom {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6vh;
+  padding: 1vh 0 0.5vh;
+  border-top: 1px solid var(--border);
+}
+
+.gesture-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.8vw;
+}
+
+.gesture-btn {
+  padding: 1.2vh 0.5vw;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gesture-btn:hover  { background: rgba(56, 189, 248, 0.1); border-color: var(--accent); }
+.gesture-btn:active { transform: translateY(1px); }
+
+/* ── Panel de control genérico ── */
+.control-panel {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.2vh 1vw;
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  flex: 1;
+  min-height: 0;
+}
+
+.control-panel--head   { border-color: rgba(34, 197, 94, 0.35); }
+.control-panel--wheels { border-color: rgba(56, 189, 248, 0.35); }
+
+.control-panel__title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── D-pad 3×3 — crece para ocupar el espacio disponible ── */
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6vh;
+  flex: 1;
+  min-height: 0;
+}
+
+.dpad-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: clamp(14px, 2vw, 26px);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+.dpad-btn:hover  { background: rgba(56, 189, 248, 0.12); border-color: var(--accent); }
+.dpad-btn:active { transform: scale(0.94); background: rgba(56, 189, 248, 0.22); }
+
+.dpad-btn--center {
+  font-size: clamp(8px, 1vw, 11px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* ── Selector de velocidad ── */
+.speed-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5vh;
+  flex-shrink: 0;
+}
+.speed-selector__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: center;
+}
+.speed-selector__buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5vw;
+}
+.speed-btn {
+  padding: 0.6vh 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.speed-btn:hover { border-color: var(--accent); color: var(--text); }
+.speed-btn--active {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Botón para abrir movimiento desde MainInterface ── */
+.movement-open-btn {
+  margin: auto;
+  padding: 12px 18px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.5;
+  transition: background 0.2s;
+}
+.movement-open-btn:hover { background: rgba(56, 189, 248, 0.22); }
+
+/* ── Botón volver ── */
+.movement-back-btn {
+  flex-shrink: 0;
+  padding: 0.7vh 14px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+.movement-back-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ════════════════════════════════════════════════════════════════
    TOP BAR — botón finalizar sesión
 ════════════════════════════════════════════════════════════════ */
 .end-session-btn {

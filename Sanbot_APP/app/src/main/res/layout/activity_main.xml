@@ -30,6 +30,19 @@
         android:text="Iniciando…"
         android:textColor="#64748b"
         android:textSize="13sp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- ── Indicador de escucha activa (solo modo NORMAL) ────────── -->
+    <TextView
+        android:id="@+id/tv_listening"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="○ En espera"
+        android:textColor="#64748b"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.08"
+        android:visibility="gone"
         android:layout_marginBottom="16dp" />
 
     <!-- ── Último texto enviado al backend ───────────────────────── -->

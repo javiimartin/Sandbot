@@ -1,5 +1,7 @@
 package com.ugr.sanbot_app;
 
+import android.content.Context;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -43,11 +45,12 @@ public class MainActivity extends BindBaseActivity {
 
     // ── Modo de operación ────────────────────────────────────────────
     // Cambiar aquí para alternar entre modos sin tocar más código.
-    private static final AppMode MODE = AppMode.DEV;
+    private static final AppMode MODE = AppMode.NORMAL;
 
     // ── UI ───────────────────────────────────────────────────────────
     private TextView tvStatus;      // estado de conexión / último texto reconocido
     private TextView tvLastSpeech;  // último texto enviado al backend
+    private TextView tvListening;   // indicador visual "ESCUCHANDO" (solo modo NORMAL)
     private EditText etDevInput;    // campo de texto (solo modo DEV)
     private Button   btnDevSend;    // botón enviar (solo modo DEV)
     private Button   btnSaludo;     // botón de saludo manual
@@ -56,7 +59,9 @@ public class MainActivity extends BindBaseActivity {
     private SpeechHelper  speechHelper;
     private HeadHelper    headHelper;
     private HandHelper    handHelper;
+    private WheelHelper   wheelHelper;
     private EmotionHelper emotionHelper;
+    private GestureHelper gestureHelper;
     private CameraHelper  cameraHelper;
 
     // ── WebSocket ────────────────────────────────────────────────────
@@ -90,6 +95,7 @@ public class MainActivity extends BindBaseActivity {
         initCamera();
 
         if (MODE == AppMode.NORMAL) {
+            muteWakeUpSound();
             initSpeechRecognition();
         } else {
             initDevMode();
@@ -99,9 +105,10 @@ public class MainActivity extends BindBaseActivity {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        // Detener la cámara ANTES de cerrar el WS (closeStream es crítico)
+        silenceHandler.removeCallbacks(flushSpeech);
         if (cameraHelper != null) cameraHelper.stop();
         if (webSocketClient != null && webSocketClient.isOpen()) webSocketClient.close();
+        restoreVolumes();
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -111,6 +118,7 @@ public class MainActivity extends BindBaseActivity {
     private void bindViews() {
         tvStatus     = findViewById(R.id.tv_status);
         tvLastSpeech = findViewById(R.id.tv_last_speech);
+        tvListening  = findViewById(R.id.tv_listening);
         etDevInput   = findViewById(R.id.et_dev_input);
         btnDevSend   = findViewById(R.id.btn_dev_send);
         btnSaludo    = findViewById(R.id.btn_saludo);
@@ -140,7 +148,9 @@ public class MainActivity extends BindBaseActivity {
         speechHelper  = new SpeechHelper(speechManager);
         headHelper    = new HeadHelper(headMotionManager, speechHelper);
         handHelper    = new HandHelper(handMotionManager, speechHelper);
+        wheelHelper   = new WheelHelper(wheelMotionManager);
         emotionHelper = new EmotionHelper(systemManager);
+        gestureHelper = new GestureHelper(handHelper, headHelper);
 
         // MediaManager: si el SDK no lo soporta en este dispositivo, la cámara
         // queda desactivada pero el resto de la app sigue funcionando.
@@ -160,18 +170,24 @@ public class MainActivity extends BindBaseActivity {
             String port = getString(R.string.backend_port);
             URI uri     = new URI("ws://" + ip + ":" + port + "/ws/robot");
 
-            webSocketClient = new RobotWebSocketClient(uri, text -> {
-                // Mensaje del mago → el robot lo dice en voz alta (hilo UI)
-                runOnUiThread(() -> {
+            webSocketClient = new RobotWebSocketClient(uri,
+                // wizard_message → TTS
+                text -> runOnUiThread(() -> {
                     speechHelper.speak(text);
                     tvLastSpeech.setText("Robot dice: " + text);
                     Log.d(TAG, "[Main] wizard_message recibido → TTS: " + text);
-                });
-            }, emotion -> {
-                runOnUiThread(() -> {
-                    emotionHelper.showEmotion(emotion);
-                });
-            }
+                }),
+                // emotion → cara
+                emotion -> runOnUiThread(() -> emotionHelper.showEmotion(emotion)),
+                // head_motion
+                (action, speed, angle) -> runOnUiThread(
+                        () -> headHelper.doAction(action, speed, angle)),
+                // wheel_motion
+                (action, speed) -> runOnUiThread(
+                        () -> wheelHelper.doAction(action, speed)),
+                // gesture
+                gesture -> runOnUiThread(
+                        () -> gestureHelper.performGesture(gesture))
             );
 
             webSocketClient.connect();
@@ -206,9 +222,66 @@ public class MainActivity extends BindBaseActivity {
     // ════════════════════════════════════════════════════════════════
 
     /**
-     * Registra los listeners de STT y activa la escucha continua.
-     * El robot envía al backend cada texto reconocido como robot_speech.
+     * Silencia todos los streams de audio excepto el TTS para eliminar
+     * el pitido/sonido de wake-up que el robot emite con cada doWakeUp().
+     * El volumen se restaura en onDestroy() para no dejarlo permanentemente a 0.
      */
+    private AudioManager audioManager;
+    private int savedSystemVol, savedNotifVol, savedRingVol;
+
+    private void muteWakeUpSound() {
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) return;
+
+        // Guardar volúmenes originales para restaurar en onDestroy
+        savedSystemVol = audioManager.getStreamVolume(AudioManager.STREAM_SYSTEM);
+        savedNotifVol  = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION);
+        savedRingVol   = audioManager.getStreamVolume(AudioManager.STREAM_RING);
+
+        audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM,       0, 0);
+        audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, 0, 0);
+        audioManager.setStreamVolume(AudioManager.STREAM_RING,         0, 0);
+
+        Log.i(TAG, "[Main] Streams SYSTEM/NOTIFICATION/RING silenciados");
+    }
+
+    private void restoreVolumes() {
+        if (audioManager == null) return;
+        audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM,       savedSystemVol, 0);
+        audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, savedNotifVol,  0);
+        audioManager.setStreamVolume(AudioManager.STREAM_RING,         savedRingVol,   0);
+        Log.i(TAG, "[Main] Volúmenes restaurados");
+    }
+
+    /**
+     * Escucha continua sin pitidos repetitivos.
+     *
+     * Estrategia:
+     *   - doWakeUp() se llama UNA SOLA VEZ al inicio para activar el micrófono.
+     *   - onRecognizeVolume() monitoriza el nivel de voz en tiempo real.
+     *     Cuando supera el umbral, mostramos el indicador visual.
+     *   - onRecognizeResult() recibe el texto reconocido y lo envía al backend.
+     *     NO llamamos doWakeUp() aquí → sin pitido.
+     *   - onSleep() solo ocurre si el firmware duerme al robot por timeout
+     *     del sistema (no por nuestro código). En ese caso SÍ relanzamos
+     *     doWakeUp() porque es inevitable — pero ocurre raramente.
+     */
+    private static final int  VOLUME_THRESHOLD  = 5;    // 0-30
+    private static final long SILENCE_DELAY_MS  = 2000; // ms de silencio antes de enviar
+
+    // Acumulador de fragmentos y timer de silencio
+    private final StringBuilder speechBuffer = new StringBuilder();
+    private final android.os.Handler silenceHandler = new android.os.Handler();
+    private final Runnable flushSpeech = () -> {
+        String full = speechBuffer.toString().trim();
+        if (!full.isEmpty()) {
+            Log.d(TAG, "[STT] Enviando acumulado: " + full);
+            runOnUiThread(() -> tvLastSpeech.setText("Escuchado: " + full));
+            sendSpeechToBackend(full);
+            speechBuffer.setLength(0);
+        }
+    };
+
     private void initSpeechRecognition() {
         SpeechManager sm = speechHelper.getSpeechManager();
 
@@ -218,41 +291,61 @@ public class MainActivity extends BindBaseActivity {
                 String recognized = grammar.getText().trim();
                 if (recognized.isEmpty()) return true;
 
-                Log.d(TAG, "[STT] Reconocido: " + recognized);
-                runOnUiThread(() -> tvLastSpeech.setText("Escuchado: " + recognized));
+                Log.d(TAG, "[STT] Fragmento: " + recognized);
 
-                // Enviar al backend para que aparezca en el chat del mago
-                sendSpeechToBackend(recognized);
+                // Acumular fragmento
+                if (speechBuffer.length() > 0) speechBuffer.append(" ");
+                speechBuffer.append(recognized);
 
-                // Reactivar la escucha para la siguiente intervención
-                speechHelper.startListening();
+                // Mostrar en pantalla lo acumulado hasta ahora
+                runOnUiThread(() -> tvLastSpeech.setText("Escuchando: " + speechBuffer));
+
+                // Reiniciar el timer: si en 2s no llega más texto, enviamos
+                silenceHandler.removeCallbacks(flushSpeech);
+                silenceHandler.postDelayed(flushSpeech, SILENCE_DELAY_MS);
 
                 return true;
             }
 
             @Override
             public void onRecognizeVolume(int volume) {
-                // Se puede usar para mostrar un indicador de volumen en el futuro
+                runOnUiThread(() -> {
+                    tvListening.setVisibility(View.VISIBLE);
+                    if (volume > VOLUME_THRESHOLD) {
+                        tvListening.setText("● ESCUCHANDO");
+                        tvListening.setTextColor(0xFF22c55e); // verde
+                    } else {
+                        tvListening.setText("○ En espera");
+                        tvListening.setTextColor(0xFF64748b); // gris
+                    }
+                });
             }
         });
 
         sm.setOnSpeechListener(new WakenListener() {
             @Override
             public void onWakeUp() {
-                Log.d(TAG, "[STT] Escucha activada");
-                runOnUiThread(() -> tvStatus.setText("Escuchando…"));
+                Log.d(TAG, "[STT] Micrófono activo");
+                runOnUiThread(() -> {
+                    tvStatus.setText("Modo NORMAL — activo");
+                    tvListening.setVisibility(View.VISIBLE);
+                });
             }
 
             @Override
             public void onSleep() {
-                Log.d(TAG, "[STT] Escucha desactivada");
-                runOnUiThread(() -> tvStatus.setText("En espera"));
+                // El firmware durmió al robot (timeout del sistema).
+                // Hay que reactivarlo — este doWakeUp() emitirá un pitido
+                // pero ocurre raramente, no cada pocos segundos.
+                Log.d(TAG, "[STT] Timeout del sistema — relanzando escucha");
+                runOnUiThread(() -> tvListening.setVisibility(View.GONE));
+                speechHelper.startListening();
             }
         });
 
-        // Arrancar la escucha al iniciar
+        // Un único doWakeUp() al inicio
         speechHelper.startListening();
-        Log.i(TAG, "[Main] Modo NORMAL: escucha STT iniciada");
+        Log.i(TAG, "[Main] Modo NORMAL: escucha STT iniciada (sin pitidos continuos)");
     }
 
     // ════════════════════════════════════════════════════════════════

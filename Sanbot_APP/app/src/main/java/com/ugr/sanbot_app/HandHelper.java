@@ -3,58 +3,109 @@ package com.ugr.sanbot_app;
 import android.os.Handler;
 import android.util.Log;
 
-import com.qihancloud.opensdk.function.beans.handmotion.*;
+import com.qihancloud.opensdk.function.beans.handmotion.AbsoluteAngleHandMotion;
+import com.qihancloud.opensdk.function.beans.handmotion.NoAngleHandMotion;
 import com.qihancloud.opensdk.function.unit.HandMotionManager;
 
+/**
+ * Control de los brazos del robot.
+ *
+ * Rango de ángulos (AbsoluteAngleHandMotion):
+ *   - 0º   → brazo levantado (horizontal hacia delante)
+ *   - 180º → brazo en reposo (pegado al cuerpo)
+ * Velocidad: 1-8.
+ *
+ * Gestos compuestos coordinan ambos brazos con timers para que
+ * los movimientos parezcan naturales.
+ */
 public class HandHelper {
 
-    private HandMotionManager handMotionManager;
-    private SpeechHelper speechHelper;
-    private Handler handler = new Handler();
-    private String TAG = "HandHelper";
+    private static final String TAG = "HandHelper";
+
+    private final HandMotionManager handMotionManager;
+    private final SpeechHelper       speechHelper;
+    private final Handler            handler = new Handler();
 
     public HandHelper(HandMotionManager handMotionManager, SpeechHelper speechHelper) {
         this.handMotionManager = handMotionManager;
-        this.speechHelper = speechHelper;
+        this.speechHelper      = speechHelper;
     }
 
-    // -----------------------------------------
-    //   LEVANTAR BRAZO DERECHO + DECIR HOLA
-    // -----------------------------------------
-    public void saludarNatural() {
+    // ── Saludar ───────────────────────────────────────────────────
 
+    /** Levanta el brazo derecho a la altura del saludo y lo baja al cabo de 5s. */
+    public void saludarNatural() {
         if (handMotionManager == null) {
             Log.e(TAG, "HandMotionManager == null");
             return;
         }
 
-        // --- 1) Levantar brazo derecho (saludo natural ≈ 90°)
-        AbsoluteAngleHandMotion levantarBrazo =
-                new AbsoluteAngleHandMotion(
-                        AbsoluteAngleHandMotion.PART_RIGHT,
-                        5,       // velocidad suave
-                        60       // ángulo de saludo
-                );
+        AbsoluteAngleHandMotion levantar = new AbsoluteAngleHandMotion(
+                AbsoluteAngleHandMotion.PART_RIGHT, 5, 60);
+        handMotionManager.doAbsoluteAngleMotion(levantar);
+        Log.d(TAG, "Saludando…");
 
-        handMotionManager.doAbsoluteAngleMotion(levantarBrazo);
-
-        // Decir "Hola"
-        // speechHelper.decir("¡Hola!, me alegro de verte");
-
-        // --- 2) Mantener brazo arriba durante 5 segundos
         handler.postDelayed(() -> {
-
-            // --- 3) Bajar brazo de vuelta a 0°
-            AbsoluteAngleHandMotion bajarBrazo =
-                    new AbsoluteAngleHandMotion(
-                            AbsoluteAngleHandMotion.PART_RIGHT,
-                            5,
-                            180       // posición inicial
-                    );
-
-            handMotionManager.doAbsoluteAngleMotion(bajarBrazo);
-
-        }, 5000); // espera 5 segundos
+            AbsoluteAngleHandMotion bajar = new AbsoluteAngleHandMotion(
+                    AbsoluteAngleHandMotion.PART_RIGHT, 5, 180);
+            handMotionManager.doAbsoluteAngleMotion(bajar);
+        }, 5000);
     }
 
+    // ── Mostrar entusiasmo ────────────────────────────────────────
+
+    /** Levanta ambos brazos en alto rápidamente y los baja. */
+    public void mostrarEntusiasmo() {
+        if (handMotionManager == null) return;
+
+        AbsoluteAngleHandMotion arriba = new AbsoluteAngleHandMotion(
+                AbsoluteAngleHandMotion.PART_BOTH, 7, 10);
+        handMotionManager.doAbsoluteAngleMotion(arriba);
+        Log.d(TAG, "Entusiasmo: brazos arriba");
+
+        // Pequeño "rebote"
+        handler.postDelayed(() -> {
+            AbsoluteAngleHandMotion medio = new AbsoluteAngleHandMotion(
+                    AbsoluteAngleHandMotion.PART_BOTH, 7, 45);
+            handMotionManager.doAbsoluteAngleMotion(medio);
+        }, 700);
+
+        handler.postDelayed(() -> {
+            AbsoluteAngleHandMotion arriba2 = new AbsoluteAngleHandMotion(
+                    AbsoluteAngleHandMotion.PART_BOTH, 7, 10);
+            handMotionManager.doAbsoluteAngleMotion(arriba2);
+        }, 1300);
+
+        // Bajar
+        handler.postDelayed(() -> {
+            AbsoluteAngleHandMotion reposo = new AbsoluteAngleHandMotion(
+                    AbsoluteAngleHandMotion.PART_BOTH, 5, 180);
+            handMotionManager.doAbsoluteAngleMotion(reposo);
+        }, 3000);
+    }
+
+    // ── Encogerse de hombros ──────────────────────────────────────
+
+    /** Sube ambos brazos a media altura y los baja, simulando un encogerse de hombros. */
+    public void encogerseHombros() {
+        if (handMotionManager == null) return;
+
+        AbsoluteAngleHandMotion subir = new AbsoluteAngleHandMotion(
+                AbsoluteAngleHandMotion.PART_BOTH, 4, 130);
+        handMotionManager.doAbsoluteAngleMotion(subir);
+
+        handler.postDelayed(() -> {
+            AbsoluteAngleHandMotion bajar = new AbsoluteAngleHandMotion(
+                    AbsoluteAngleHandMotion.PART_BOTH, 4, 180);
+            handMotionManager.doAbsoluteAngleMotion(bajar);
+        }, 1500);
+    }
+
+    /** Devuelve ambos brazos a la posición de reposo. */
+    public void resetBrazos() {
+        if (handMotionManager == null) return;
+        NoAngleHandMotion reset = new NoAngleHandMotion(
+                NoAngleHandMotion.PART_BOTH, (byte) 5, NoAngleHandMotion.ACTION_RESET);
+        handMotionManager.doNoAngleMotion(reset);
+    }
 }

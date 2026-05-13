@@ -2,8 +2,6 @@ package com.ugr.sanbot_app;
 
 import android.util.Log;
 
-import androidx.core.view.OneShotPreDrawListener;
-
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.json.JSONException;
@@ -15,50 +13,59 @@ import java.net.URI;
  * Cliente WebSocket que conecta el robot con el backend FastAPI.
  *
  * Mensajes recibidos (backend → robot):
- *   { "type": "wizard_message", "text": "...", "message_id": "..." }
- *   El mago ha enviado un texto que el robot debe reproducir en voz alta.
+ *   { "type": "wizard_message", ... }   → texto que el robot debe verbalizar
+ *   { "type": "emotion",        ... }   → expresión facial a mostrar
+ *   { "type": "head_motion",    ... }   → mover la cabeza
+ *   { "type": "wheel_motion",   ... }   → mover las ruedas
+ *   { "type": "gesture",        ... }   → ejecutar gesto compuesto
  *
  * Mensajes enviados (robot → backend):
- *   { "type": "robot_speech", "text": "..." }
- *   El robot (o el participante) ha dicho algo; el backend lo reenvía
- *   al frontend del mago para mostrarlo en el chat.
+ *   { "type": "robot_speech", ... }  → lo que dice el participante (ASR)
+ *   { "type": "robot_image",  ... }  → fotograma de la cámara
  */
 public class RobotWebSocketClient extends WebSocketClient {
 
     private static final String TAG = "Mi_APP";
 
-    /** Callback invocado en el hilo de UI con el texto que el robot debe decir. */
-    public interface OnWizardMessageListener {
-        void onWizardMessage(String text);
-    }
+    public interface OnWizardMessageListener { void onWizardMessage(String text); }
+    public interface OnEmotionListener       { void onEmotion(String emotion); }
+    public interface OnHeadMotionListener    { void onHeadMotion(String action, int speed, int angle); }
+    public interface OnWheelMotionListener   { void onWheelMotion(String action, int speed); }
+    public interface OnGestureListener       { void onGesture(String gesture); }
 
-    public interface OnEmotionListener {
-        void onEmotion(String emotion);
-    }
+    private final OnWizardMessageListener wizardListener;
+    private final OnEmotionListener       emotionListener;
+    private final OnHeadMotionListener    headListener;
+    private final OnWheelMotionListener   wheelListener;
+    private final OnGestureListener       gestureListener;
 
-    private final OnWizardMessageListener listener;
-    private final OnEmotionListener emotionListener;
-
-    public RobotWebSocketClient(URI serverUri, OnWizardMessageListener listener, OnEmotionListener emotionListener) {
+    public RobotWebSocketClient(
+            URI serverUri,
+            OnWizardMessageListener wizardListener,
+            OnEmotionListener       emotionListener,
+            OnHeadMotionListener    headListener,
+            OnWheelMotionListener   wheelListener,
+            OnGestureListener       gestureListener
+    ) {
         super(serverUri);
-        this.listener = listener;
+        this.wizardListener  = wizardListener;
         this.emotionListener = emotionListener;
+        this.headListener    = headListener;
+        this.wheelListener   = wheelListener;
+        this.gestureListener = gestureListener;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────
 
-    @Override
-    public void onOpen(ServerHandshake handshake) {
+    @Override public void onOpen(ServerHandshake handshake) {
         Log.i(TAG, "[WS] Conectado al backend: " + getURI());
     }
 
-    @Override
-    public void onClose(int code, String reason, boolean remote) {
+    @Override public void onClose(int code, String reason, boolean remote) {
         Log.w(TAG, "[WS] Desconectado — código: " + code + " | razón: " + reason);
     }
 
-    @Override
-    public void onError(Exception e) {
+    @Override public void onError(Exception e) {
         Log.e(TAG, "[WS] Error de conexión: " + e.getMessage());
     }
 
@@ -69,30 +76,50 @@ public class RobotWebSocketClient extends WebSocketClient {
         Log.d(TAG, "[WS] Mensaje recibido: " + raw);
 
         try {
-            JSONObject json    = new JSONObject(raw);
-            String     type    = json.optString("type", "");
+            JSONObject json = new JSONObject(raw);
+            String     type = json.optString("type", "");
 
             switch (type) {
-                case "wizard_message":
+                case "wizard_message": {
                     String text = json.optString("text", "").trim();
-                    if (!text.isEmpty() && listener != null) {
-                        listener.onWizardMessage(text);
+                    if (!text.isEmpty() && wizardListener != null) {
+                        wizardListener.onWizardMessage(text);
                     }
                     break;
-
-                case "emotion":
+                }
+                case "emotion": {
                     String emotion = json.optString("emotion", "NORMAL").trim();
-
                     if (!emotion.isEmpty() && emotionListener != null) {
                         emotionListener.onEmotion(emotion);
                     }
-
                     break;
-
+                }
+                case "head_motion": {
+                    String action = json.optString("action", "");
+                    int    speed  = json.optInt("speed", 5);
+                    int    angle  = json.optInt("angle", 15);
+                    if (!action.isEmpty() && headListener != null) {
+                        headListener.onHeadMotion(action, speed, angle);
+                    }
+                    break;
+                }
+                case "wheel_motion": {
+                    String action = json.optString("action", "");
+                    int    speed  = json.optInt("speed", 5);
+                    if (!action.isEmpty() && wheelListener != null) {
+                        wheelListener.onWheelMotion(action, speed);
+                    }
+                    break;
+                }
+                case "gesture": {
+                    String gesture = json.optString("gesture", "");
+                    if (!gesture.isEmpty() && gestureListener != null) {
+                        gestureListener.onGesture(gesture);
+                    }
+                    break;
+                }
                 case "status":
-                    // Mensaje de estado de conexión — ignorado en el robot por ahora
                     break;
-
                 default:
                     Log.d(TAG, "[WS] Tipo de mensaje no gestionado: " + type);
             }
@@ -104,10 +131,6 @@ public class RobotWebSocketClient extends WebSocketClient {
 
     // ── Outgoing messages ────────────────────────────────────────────
 
-    /**
-     * Envía al backend lo que el robot (o el participante) ha dicho.
-     * El backend lo reenvía al frontend del mago como burbuja de chat.
-     */
     public void sendRobotSpeech(String text) {
         if (!isOpen()) {
             Log.w(TAG, "[WS] sendRobotSpeech ignorado: socket no conectado.");
@@ -124,12 +147,6 @@ public class RobotWebSocketClient extends WebSocketClient {
         }
     }
 
-    /**
-     * Envía un fotograma de la cámara al backend (JPEG codificado en base64).
-     * El backend lo retransmite al wizard frontend para mostrarlo en tiempo real.
-     *
-     * @param base64Jpeg Imagen JPEG codificada en base64 sin saltos de línea.
-     */
     public void sendRobotImage(String base64Jpeg) {
         if (!isOpen()) {
             Log.w(TAG, "[WS] sendRobotImage ignorado: socket no conectado.");

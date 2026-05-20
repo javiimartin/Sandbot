@@ -10,19 +10,22 @@ export function useWebSocket(
   onStatusChange,
   onIncomingMessage,
   onDeliveryConfirm,
-  onCameraFrame        // (imageB64: string, timestamp: string) => void
+  onCameraFrame,       // (imageB64: string, timestamp: string) => void
+  onAiSuggestion       // (text: string, emotion: string) => void
 ) {
   const socketRef = useRef(null);
 
-  const onStatusRef   = useRef(onStatusChange);
-  const onMessageRef  = useRef(onIncomingMessage);
-  const onDeliveryRef = useRef(onDeliveryConfirm);
-  const onCameraRef   = useRef(onCameraFrame);
+  const onStatusRef       = useRef(onStatusChange);
+  const onMessageRef      = useRef(onIncomingMessage);
+  const onDeliveryRef     = useRef(onDeliveryConfirm);
+  const onCameraRef       = useRef(onCameraFrame);
+  const onAiSuggestionRef = useRef(onAiSuggestion);
 
-  useEffect(() => { onStatusRef.current   = onStatusChange;    }, [onStatusChange]);
-  useEffect(() => { onMessageRef.current  = onIncomingMessage; }, [onIncomingMessage]);
-  useEffect(() => { onDeliveryRef.current = onDeliveryConfirm; }, [onDeliveryConfirm]);
-  useEffect(() => { onCameraRef.current   = onCameraFrame;     }, [onCameraFrame]);
+  useEffect(() => { onStatusRef.current       = onStatusChange;    }, [onStatusChange]);
+  useEffect(() => { onMessageRef.current      = onIncomingMessage; }, [onIncomingMessage]);
+  useEffect(() => { onDeliveryRef.current     = onDeliveryConfirm; }, [onDeliveryConfirm]);
+  useEffect(() => { onCameraRef.current       = onCameraFrame;     }, [onCameraFrame]);
+  useEffect(() => { onAiSuggestionRef.current = onAiSuggestion;    }, [onAiSuggestion]);
 
   useEffect(() => {
     // Evita que React StrictMode abra dos sockets
@@ -61,6 +64,12 @@ export function useWebSocket(
         case "robot_image":
           if (data.image && onCameraRef.current) {
             onCameraRef.current(data.image, data.timestamp ?? "");
+          }
+          break;
+
+        case "ai_suggestion":
+          if (onAiSuggestionRef.current) {
+            onAiSuggestionRef.current(data.text, data.emotion);
           }
           break;
 

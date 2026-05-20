@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # Base de datos
     database_url: str = "postgresql+asyncpg://woz:woz@localhost:5432/woz"
 
+    # LM Studio (LLM local)
+    lm_studio_url: str   = "http://localhost:1234"   # IP:puerto del servidor LM Studio
+    lm_studio_model: str = "local-model"             # nombre del modelo cargado
+    ai_context_messages: int = 5                     # mensajes de historial para el LLM
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

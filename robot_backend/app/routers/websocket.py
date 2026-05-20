@@ -14,6 +14,7 @@ Mensajes robot → backend
                   Se persiste en robot_events.
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -25,7 +26,8 @@ from app.connection_manager import ClientRole, manager
 from app import session_state
 from app.database import AsyncSessionLocal
 from app.db_models import Message, RobotEvent
-from app.models import WsMessageType, make_robot_image, make_robot_speech, make_status
+from app.models import WsMessageType, make_ai_suggestion, make_robot_image, make_robot_speech, make_status
+from app.routers import ai as ai_module
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +75,10 @@ async def robot_ws(websocket: WebSocket):
                     await manager.send_to_role(ClientRole.WIZARD, make_robot_speech(text))
                     # Persistir como mensaje del participante
                     await _persist_participant_message(text)
+                    # Generar sugerencia de IA en background (no bloquea el WS)
+                    sid = session_state.get_active()
+                    if sid is not None:
+                        asyncio.create_task(_trigger_ai_suggestion(text, sid))
 
             elif msg_type == WsMessageType.ROBOT_EVENT:
                 await _persist_robot_event(data)
@@ -113,6 +119,18 @@ async def _persist_participant_message(text: str) -> None:
         await db.commit()
 
     logger.info("[robot_speech] Persistido | session=%s | text=%r", sid, text)
+
+
+async def _trigger_ai_suggestion(text: str, session_id: uuid.UUID) -> None:
+    """Llama al LLM y, si hay resultado, lo envía al wizard frontend."""
+    suggestion = await ai_module.generate_suggestion(session_id, text)
+    if suggestion is None:
+        return
+    await manager.send_to_role(
+        ClientRole.WIZARD,
+        make_ai_suggestion(suggestion["text"], suggestion["emotion"]),
+    )
+    logger.info("[AI] Sugerencia enviada al wizard | session=%s", session_id)
 
 
 async def _persist_robot_event(data: dict) -> None:

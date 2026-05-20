@@ -42,6 +42,7 @@ class WsMessageType(StrEnum):
     HEAD_MOTION    = "head_motion"      # backend → robot: mover la cabeza
     WHEEL_MOTION   = "wheel_motion"     # backend → robot: mover las ruedas
     GESTURE        = "gesture"          # backend → robot: ejecutar gesto predefinido
+    AI_SUGGESTION  = "ai_suggestion"    # backend → wizard: sugerencia generada por LLM
 
 
 # ── Robot emotion values ──────────────────────────────────────────
@@ -214,4 +215,13 @@ def make_gesture(gesture: GestureType) -> dict[str, Any]:
     return {
         "type":    WsMessageType.GESTURE,
         "gesture": gesture.value,
+    }
+
+
+def make_ai_suggestion(text: str, emotion: str) -> dict[str, Any]:
+    """Sugerencia de respuesta generada por el LLM, enviada al wizard frontend."""
+    return {
+        "type":    WsMessageType.AI_SUGGESTION,
+        "text":    text,
+        "emotion": emotion,
     }

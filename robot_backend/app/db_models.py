@@ -165,3 +165,68 @@ class RobotEvent(Base):
 
     session: Mapped["Session | None"] = relationship(back_populates="events")
     message: Mapped["Message | None"] = relationship(back_populates="events")
+
+
+# ── Contexto conversacional ──────────────────────────────────────────────────
+
+class Context(Base):
+    """
+    Unidad reutilizable de diseño conversacional.
+
+    Cada contexto describe una situación tipo (descripción + perfil de usuario)
+    y contiene un diálogo ejemplo (context_messages) que sirve como base para
+    la recomendación contextual de la siguiente entrega.
+
+    source → 'llm' generado por el modelo de lenguaje
+             'manual' creado a mano por el operador
+    """
+
+    __tablename__ = "contexts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    user_profile: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[list] = mapped_column(JSONB, default=list)
+    prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")  # llm | manual
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, nullable=False
+    )
+    extra: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+    messages: Mapped[list["ContextMessage"]] = relationship(
+        back_populates="context",
+        cascade="all, delete-orphan",
+        order_by="ContextMessage.order_index",
+    )
+
+
+class ContextMessage(Base):
+    """
+    Una línea de diálogo dentro de un contexto.
+
+    role → 'participant' (lo que diría la persona mayor)
+           'robot'       (lo que respondería el robot)
+    """
+
+    __tablename__ = "context_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    context_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("contexts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)  # participant | robot
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    emotion: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    order_index: Mapped[int] = mapped_column(nullable=False, default=0)
+
+    context: Mapped["Context"] = relationship(back_populates="messages")

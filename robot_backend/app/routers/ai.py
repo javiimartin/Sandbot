@@ -126,3 +126,122 @@ def _parse_response(data: dict) -> dict | None:
     except Exception as exc:
         logger.warning("[AI] No se pudo parsear respuesta del LLM: %s", exc)
         return None
+
+
+# ── Generación de contextos conversacionales ─────────────────────────────────
+
+CONTEXT_SYSTEM_PROMPT = """\
+Eres un diseñador de interacciones humano-robot enfocadas a personas mayores.
+A partir de una descripción de situación, genera un contexto conversacional
+estructurado que pueda usarse como ejemplo para guiar al robot en situaciones
+similares.
+
+Responde ÚNICAMENTE con JSON válido, sin texto extra, en este formato:
+{
+  "title": "<3-6 palabras>",
+  "description": "<2-3 frases describiendo la escena>",
+  "user_profile": "<descripción breve del tipo de persona mayor>",
+  "tags": ["tag1", "tag2", "tag3"],
+  "example_dialogue": [
+    {"role": "participant", "text": "..."},
+    {"role": "robot", "text": "...", "emotion": "SMILE"},
+    {"role": "participant", "text": "..."},
+    {"role": "robot", "text": "...", "emotion": "NORMAL"}
+  ]
+}
+
+El diálogo debe tener entre 4 y 8 turnos alternados, en español, natural,
+adaptado a una persona mayor. Las emociones del robot deben ser una de:
+NORMAL, SMILE, LAUGHTER, SURPRISE, QUESTION, SHY, ANGRY, CRY.\
+"""
+
+
+async def generate_context(prompt: str, user_profile_hint: str | None = None) -> dict | None:
+    """
+    Genera un contexto conversacional usando el LLM local.
+
+    Devuelve un dict con las claves: title, description, user_profile,
+    tags, example_dialogue. None si falla.
+    """
+    user_msg = prompt
+    if user_profile_hint:
+        user_msg += f"\n\nPerfil de usuario sugerido: {user_profile_hint}"
+
+    payload = {
+        "model":       settings.lm_studio_model,
+        "messages":    [
+            {"role": "system", "content": CONTEXT_SYSTEM_PROMPT},
+            {"role": "user",   "content": user_msg},
+        ],
+        "temperature": 0.9,
+        "max_tokens":  800,
+    }
+
+    url = f"{settings.lm_studio_url.rstrip('/')}/v1/chat/completions"
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+    except Exception as exc:
+        logger.warning("[AI] LM Studio no disponible para generar contexto: %s", exc)
+        return None
+
+    return _parse_context_response(resp.json())
+
+
+def _parse_context_response(data: dict) -> dict | None:
+    """Extrae y valida el JSON del contexto generado por el LLM."""
+    try:
+        content = data["choices"][0]["message"]["content"].strip()
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+            content = content.strip()
+
+        parsed = json.loads(content)
+
+        title       = str(parsed.get("title", "")).strip()
+        description = str(parsed.get("description", "")).strip()
+        if not title or not description:
+            logger.warning("[AI] Contexto sin title/description: %s", content[:200])
+            return None
+
+        user_profile = parsed.get("user_profile")
+        if user_profile is not None:
+            user_profile = str(user_profile).strip() or None
+
+        raw_tags = parsed.get("tags") or []
+        tags = [str(t).strip() for t in raw_tags if str(t).strip()]
+
+        raw_dialogue = parsed.get("example_dialogue") or []
+        dialogue = []
+        for i, turn in enumerate(raw_dialogue):
+            role = str(turn.get("role", "")).strip().lower()
+            text = str(turn.get("text", "")).strip()
+            if role not in ("participant", "robot") or not text:
+                continue
+            emotion = None
+            if role == "robot":
+                e = str(turn.get("emotion", "NORMAL")).strip().upper()
+                emotion = e if e in VALID_EMOTIONS else "NORMAL"
+            dialogue.append({
+                "role":        role,
+                "text":        text,
+                "emotion":     emotion,
+                "order_index": i,
+            })
+
+        logger.info("[AI] Contexto generado: title=%r turnos=%d", title, len(dialogue))
+        return {
+            "title":            title,
+            "description":      description,
+            "user_profile":     user_profile,
+            "tags":             tags,
+            "example_dialogue": dialogue,
+        }
+
+    except Exception as exc:
+        logger.warning("[AI] No se pudo parsear contexto del LLM: %s", exc)
+        return None

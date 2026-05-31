@@ -10,7 +10,7 @@ const STATUS_LABEL = {
   disconnected: 'Sin conexión',
 }
 
-export default function SetupScreen({ onStart, onViewRecords }) {
+export default function SetupScreen({ onStart, onViewRecords, onViewContexts }) {
   const [users, setUsers]               = useState([])
   const [query, setQuery]               = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
@@ -129,9 +129,14 @@ export default function SetupScreen({ onStart, onViewRecords }) {
         <div className="setup-header">
           <h1>Interfaz de control del Mago de Oz</h1>
           <p>Configuración de la sesión de interacción humano-robot</p>
-          <button className="setup-records-btn" onClick={onViewRecords}>
-            Ver registros
-          </button>
+          <div className="setup-header-actions">
+            <button className="setup-records-btn" onClick={onViewContexts}>
+              Gestionar contextos
+            </button>
+            <button className="setup-records-btn" onClick={onViewRecords}>
+              Ver registros
+            </button>
+          </div>
         </div>
 
         <div className="setup-body">

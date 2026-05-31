@@ -1,6 +1,8 @@
 package com.ugr.sanbot_app;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.os.Bundle;
 import android.util.Log;
@@ -10,6 +12,9 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.qihancloud.opensdk.base.BindBaseActivity;
 import com.qihancloud.opensdk.beans.FuncConstant;
@@ -203,8 +208,38 @@ public class MainActivity extends BindBaseActivity {
         btnSaludo.setOnClickListener(v -> handHelper.saludarNatural());
     }
 
+    private static final int REQUEST_CAMERA = 100;
+
     private void initCamera() {
         if (cameraHelper == null) return;
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.i(TAG, "[Main] Permiso de cámara no concedido, solicitando…");
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA);
+            // La cámara se arrancará en onRequestPermissionsResult si se concede.
+            return;
+        }
+        startCamera();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String[] permissions,
+                                           int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CAMERA) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.i(TAG, "[Main] Permiso de cámara concedido");
+                startCamera();
+            } else {
+                Log.w(TAG, "[Main] Permiso de cámara denegado, cámara desactivada");
+            }
+        }
+    }
+
+    private void startCamera() {
         try {
             cameraHelper.start(base64Jpeg -> {
                 if (webSocketClient != null && webSocketClient.isOpen()) {

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import SetupScreen     from './components/SetupScreen'
 import MainInterface   from './components/MainInterface'
 import SessionsView    from './components/SessionsView'
+import ContextsView    from './components/ContextsView'
 import MovementControl from './components/MovementControl'
 
 /**
@@ -10,6 +11,7 @@ import MovementControl from './components/MovementControl'
  *
  * view === 'setup'    →  pantalla de configuración de sesión
  * view === 'records'  →  vista de consulta de registros históricos
+ * view === 'contexts' →  vista de gestión de contextos conversacionales
  * view === 'session'  →  interfaz principal del mago durante una sesión activa
  * view === 'movement' →  panel de control de movimiento del robot
  */
@@ -43,10 +45,15 @@ export default function App() {
     return <SessionsView onBack={() => setView('setup')} />
   }
 
+  if (view === 'contexts') {
+    return <ContextsView onBack={() => setView('setup')} />
+  }
+
   return (
     <SetupScreen
       onStart={(s) => { setSession(s); setView('session') }}
       onViewRecords={() => setView('records')}
+      onViewContexts={() => setView('contexts')}
     />
   )
 }

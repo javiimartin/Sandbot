@@ -28,6 +28,27 @@ android {
         }
     }
 
+    // Flavor "legacy" para el Sanbot físico:
+    //   - targetSdk = 22 desactiva la restricción de text relocations (API 23+)
+    //     que impide cargar libuvcNative.so (la librería nativa de la cámara).
+    //   - Incluye armeabi además de armeabi-v7a porque el .so del SDK
+    //     está empaquetado bajo jni/armeabi/ dentro del AAR.
+    flavorDimensions += "target"
+    productFlavors {
+        create("standard") {
+            dimension = "target"
+            // Hereda todo de defaultConfig, no sobreescribe nada.
+        }
+        create("legacy") {
+            dimension = "target"
+            targetSdk = 22
+            versionNameSuffix = "-legacy"
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "armeabi")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

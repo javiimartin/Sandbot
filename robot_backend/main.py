@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
+from app.routers import contexts    as contexts_router
 from app.routers import events      as events_router
 from app.routers import messages    as msg_router
 from app.routers import sessions    as sessions_router
@@ -63,6 +64,7 @@ app.include_router(ws_router.router)
 app.include_router(msg_router.router)
 app.include_router(sessions_router.router)
 app.include_router(events_router.router)
+app.include_router(contexts_router.router)
 
 
 # ── Health check ─────────────────────────────────────────────────

@@ -225,3 +225,40 @@ def make_ai_suggestion(text: str, emotion: str) -> dict[str, Any]:
         "text":    text,
         "emotion": emotion,
     }
+
+
+# ── Schemas de contextos conversacionales ────────────────────────────────────
+
+class ContextMessageSchema(BaseModel):
+    """Una línea de diálogo dentro de un contexto."""
+    role:        str                # participant | robot
+    text:        str
+    emotion:     str | None = None  # solo para robot
+    order_index: int = 0
+
+
+class ContextGenerateRequest(BaseModel):
+    """Body de POST /contexts/generate."""
+    prompt:            str
+    user_profile_hint: str | None = None
+
+
+class ContextCreateRequest(BaseModel):
+    """Body de POST /contexts (creación manual o tras generación)."""
+    title:        str
+    description:  str
+    user_profile: str | None = None
+    tags:         list[str] = []
+    prompt:       str | None = None
+    source:       str = "manual"   # llm | manual
+    model:        str | None = None
+    messages:     list[ContextMessageSchema] = []
+
+
+class ContextUpdateRequest(BaseModel):
+    """Body de PUT /contexts/{id} — todos los campos opcionales."""
+    title:        str | None = None
+    description:  str | None = None
+    user_profile: str | None = None
+    tags:         list[str] | None = None
+    messages:     list[ContextMessageSchema] | None = None

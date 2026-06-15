@@ -1,18 +1,18 @@
 """
 Router HTTP para la gestión de contextos conversacionales.
 
-Un contexto agrupa: situación, perfil de usuario, tags y un diálogo ejemplo.
-Se genera con LLM o se crea manualmente. La entrega 5 los usará como base
-para recomendar respuestas al mago durante la sesión.
+Un contexto agrupa: situación, perfil de usuario, tags y un banco de frases
+predefinidas del robot. Se genera con LLM o se crea manualmente. La entrega 5
+usará estas frases para que el mago las dispare durante la sesión.
 
 Endpoints
 ─────────
   POST   /contexts/generate     – Genera con LLM (no persiste todavía).
   POST   /contexts              – Crea un contexto (manual o tras generar).
   GET    /contexts              – Lista (filtros: q, tag, source).
-  GET    /contexts/{id}         – Detalle con sus mensajes.
-  PUT    /contexts/{id}         – Edita campos / reemplaza mensajes.
-  DELETE /contexts/{id}         – Elimina (cascade borra los mensajes).
+  GET    /contexts/{id}         – Detalle con sus frases.
+  PUT    /contexts/{id}         – Edita campos / reemplaza frases.
+  DELETE /contexts/{id}         – Elimina (cascade borra las frases).
 """
 
 import logging
@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.db_models import Context, ContextMessage
+from app.db_models import Context, ContextPhrase
 from app.models import (
     ContextCreateRequest,
     ContextGenerateRequest,
@@ -39,17 +39,15 @@ router = APIRouter(prefix="/contexts", tags=["contexts"])
 
 # ── Helpers de serialización ─────────────────────────────────────────────────
 
-def _serialize_message(m: ContextMessage) -> dict:
+def _serialize_phrase(p: ContextPhrase) -> dict:
     return {
-        "id":          str(m.id),
-        "role":        m.role,
-        "text":        m.text,
-        "emotion":     m.emotion,
-        "order_index": m.order_index,
+        "id":      str(p.id),
+        "text":    p.text,
+        "emotion": p.emotion,
     }
 
 
-def _serialize_context(c: Context, include_messages: bool = True) -> dict:
+def _serialize_context(c: Context, include_phrases: bool = True) -> dict:
     data = {
         "id":           str(c.id),
         "title":        c.title,
@@ -61,8 +59,11 @@ def _serialize_context(c: Context, include_messages: bool = True) -> dict:
         "model":        c.model,
         "created_at":   c.created_at,
     }
-    if include_messages:
-        data["messages"] = [_serialize_message(m) for m in c.messages]
+    if include_phrases:
+        data["phrases"] = [_serialize_phrase(p) for p in c.phrases]
+    else:
+        # En el listado, informar al menos del número de frases
+        data["phrase_count"] = len(c.phrases) if c.phrases is not None else 0
     return data
 
 
@@ -88,7 +89,7 @@ async def generate_context(body: ContextGenerateRequest):
         "description":  result["description"],
         "user_profile": result["user_profile"],
         "tags":         result["tags"],
-        "messages":     result["example_dialogue"],
+        "phrases":      result["phrases"],
         "prompt":       body.prompt,
         "source":       "llm",
         "model":        settings.lm_studio_model,
@@ -108,22 +109,20 @@ async def create_context(body: ContextCreateRequest, db: AsyncSession = Depends(
         model        = body.model,
     )
     db.add(ctx)
-    await db.flush()  # obtiene ctx.id antes de añadir los mensajes
+    await db.flush()  # obtiene ctx.id antes de añadir las frases
 
-    for i, msg in enumerate(body.messages):
-        db.add(ContextMessage(
-            context_id  = ctx.id,
-            role        = msg.role,
-            text        = msg.text,
-            emotion     = msg.emotion,
-            order_index = msg.order_index if msg.order_index is not None else i,
+    for p in body.phrases:
+        db.add(ContextPhrase(
+            context_id = ctx.id,
+            text       = p.text,
+            emotion    = p.emotion,
         ))
 
     await db.commit()
-    await db.refresh(ctx, attribute_names=["messages"])
+    await db.refresh(ctx, attribute_names=["phrases"])
 
-    logger.info("[context] Creado | id=%s | title=%r | source=%s | turnos=%d",
-                ctx.id, ctx.title, ctx.source, len(body.messages))
+    logger.info("[context] Creado | id=%s | title=%r | source=%s | frases=%d",
+                ctx.id, ctx.title, ctx.source, len(body.phrases))
     return _serialize_context(ctx)
 
 
@@ -147,24 +146,27 @@ async def list_contexts(
     result = await db.execute(stmt)
     contexts = result.scalars().all()
 
-    return [_serialize_context(c, include_messages=False) for c in contexts]
+    # Cargar las frases para poder contarlas en cada card
+    for c in contexts:
+        await db.refresh(c, attribute_names=["phrases"])
+
+    return [_serialize_context(c, include_phrases=False) for c in contexts]
 
 
 @router.get("/{context_id}", status_code=status.HTTP_200_OK,
-            summary="Detalle de un contexto con sus mensajes")
+            summary="Detalle de un contexto con sus frases")
 async def get_context(context_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Context).where(Context.id == context_id))
     ctx = result.scalar_one_or_none()
     if ctx is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contexto no encontrado.")
 
-    # Forzar la carga de mensajes (lazy load)
-    await db.refresh(ctx, attribute_names=["messages"])
+    await db.refresh(ctx, attribute_names=["phrases"])
     return _serialize_context(ctx)
 
 
 @router.put("/{context_id}", status_code=status.HTTP_200_OK,
-            summary="Edita un contexto y reemplaza sus mensajes si se indican")
+            summary="Edita un contexto y reemplaza sus frases si se indican")
 async def update_context(
     context_id: uuid.UUID,
     body: ContextUpdateRequest,
@@ -184,30 +186,27 @@ async def update_context(
     if body.tags is not None:
         ctx.tags = body.tags
 
-    # Si se pasa una lista nueva de mensajes, reemplaza la existente entera
-    if body.messages is not None:
-        # Cargar relación para que el cascade borre los actuales
-        await db.refresh(ctx, attribute_names=["messages"])
-        ctx.messages.clear()
+    # Si se pasa una lista nueva de frases, reemplaza la existente entera
+    if body.phrases is not None:
+        await db.refresh(ctx, attribute_names=["phrases"])
+        ctx.phrases.clear()
         await db.flush()
-        for i, msg in enumerate(body.messages):
-            db.add(ContextMessage(
-                context_id  = ctx.id,
-                role        = msg.role,
-                text        = msg.text,
-                emotion     = msg.emotion,
-                order_index = msg.order_index if msg.order_index is not None else i,
+        for p in body.phrases:
+            db.add(ContextPhrase(
+                context_id = ctx.id,
+                text       = p.text,
+                emotion    = p.emotion,
             ))
 
     await db.commit()
-    await db.refresh(ctx, attribute_names=["messages"])
+    await db.refresh(ctx, attribute_names=["phrases"])
 
     logger.info("[context] Actualizado | id=%s", ctx.id)
     return _serialize_context(ctx)
 
 
 @router.delete("/{context_id}", status_code=status.HTTP_204_NO_CONTENT,
-               summary="Elimina un contexto y sus mensajes")
+               summary="Elimina un contexto y sus frases")
 async def delete_context(context_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Context).where(Context.id == context_id))
     ctx = result.scalar_one_or_none()

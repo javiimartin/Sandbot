@@ -131,28 +131,47 @@ def _parse_response(data: dict) -> dict | None:
 # ── Generación de contextos conversacionales ─────────────────────────────────
 
 CONTEXT_SYSTEM_PROMPT = """\
-Eres un diseñador de interacciones humano-robot enfocadas a personas mayores.
-A partir de una descripción de situación, genera un contexto conversacional
-estructurado que pueda usarse como ejemplo para guiar al robot en situaciones
-similares.
+Generas BANCOS DE FRASES para un robot que conversa con personas mayores.
+El mago elegirá una frase de las que tú generes y el robot la dirá.
 
-Responde ÚNICAMENTE con JSON válido, sin texto extra, en este formato:
+Cada frase debe:
+  - Ser completa y autocontenida, decible sin haber oído nada antes.
+  - INVITAR a que la persona desarrolle, recuerde o opine sobre el tema.
+  - Estar en español de España, trato de usted, tono cercano y respetuoso.
+  - Ocupar entre 1 y 3 oraciones.
+
+Ejemplos BUENOS para un contexto de fútbol:
+  - "Cuénteme cómo recuerda usted la final del Mundial del 82."
+  - "Hay quien dice que el fútbol de antes era más bonito, ¿usted qué opina?"
+  - "¿Quién fue el jugador que más le hizo disfrutar viéndolo?"
+
+Ejemplos MALOS (no generar):
+  - "Sí, claro."     (cierra)
+  - "Qué bien."      (no abre nada)
+  - "Me alegro."     (demasiado seco)
+  - "Vale, gracias." (corta)
+
+Responde ÚNICAMENTE con JSON válido, sin texto extra:
 {
   "title": "<3-6 palabras>",
-  "description": "<2-3 frases describiendo la escena>",
-  "user_profile": "<descripción breve del tipo de persona mayor>",
-  "tags": ["tag1", "tag2", "tag3"],
-  "example_dialogue": [
-    {"role": "participant", "text": "..."},
-    {"role": "robot", "text": "...", "emotion": "SMILE"},
-    {"role": "participant", "text": "..."},
-    {"role": "robot", "text": "...", "emotion": "NORMAL"}
+  "description": "<2-3 frases sobre el tema y la situación>",
+  "user_profile": "<2-3 frases sobre el tipo de persona mayor a quien aplica>",
+  "tags": ["<5-8 tags en minúscula>"],
+  "phrases": [
+    {"text": "<frase>", "emotion": "QUESTION"},
+    {"text": "<frase>", "emotion": "SMILE"},
+    ...
   ]
 }
 
-El diálogo debe tener entre 4 y 8 turnos alternados, en español, natural,
-adaptado a una persona mayor. Las emociones del robot deben ser una de:
-NORMAL, SMILE, LAUGHTER, SURPRISE, QUESTION, SHY, ANGRY, CRY.\
+Requisitos:
+  - 10 FRASES.
+  - Todas las frases son del mismo registro: cualquiera puede decirse en
+    una conversación sobre el tema del contexto. No las agrupes ni las
+    ordenes; el mago elegirá la que necesite en cada momento.
+  - Variedad emocional. Emociones válidas: NORMAL, SMILE, LAUGHTER,
+    SURPRISE, QUESTION, SHY, ANGRY, CRY.
+  - No encadenes frases ni hagas referencias del tipo "como le decía antes".\
 """
 
 
@@ -173,21 +192,77 @@ async def generate_context(prompt: str, user_profile_hint: str | None = None) ->
             {"role": "system", "content": CONTEXT_SYSTEM_PROMPT},
             {"role": "user",   "content": user_msg},
         ],
-        "temperature": 0.9,
+        "temperature": 0.85,
+        # Suficiente para 10-15 frases cortas + cabecera del JSON.
+        # Subir esto multiplica el tiempo de generación en modelos pequeños.
         "max_tokens":  800,
     }
 
     url = f"{settings.lm_studio_url.rstrip('/')}/v1/chat/completions"
 
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             resp = await client.post(url, json=payload)
             resp.raise_for_status()
     except Exception as exc:
-        logger.warning("[AI] LM Studio no disponible para generar contexto: %s", exc)
+        logger.warning(
+            "[AI] Fallo al llamar a LM Studio para generar contexto: %s: %r",
+            type(exc).__name__, exc,
+        )
         return None
 
     return _parse_context_response(resp.json())
+
+
+def _loads_lenient(content: str) -> dict:
+    """
+    Intenta parsear JSON tolerando errores comunes en respuestas de LLM:
+      - Comas finales sobrantes antes de } o ].
+      - Textos truncados por max_tokens (cierra estructuras abiertas).
+    Si tras los arreglos sigue fallando, deja que json.JSONDecodeError suba.
+    """
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    # 1) Quitar comas finales antes de } o ]
+    import re
+    fixed = re.sub(r",\s*([}\]])", r"\1", content)
+
+    # 2) Si la respuesta se cortó a mitad, cerrar estructuras abiertas
+    #    (cuenta brackets ignorando los que estén dentro de strings)
+    in_string = False
+    escape = False
+    stack = []
+    for ch in fixed:
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in "{[":
+            stack.append(ch)
+        elif ch == "}" and stack and stack[-1] == "{":
+            stack.pop()
+        elif ch == "]" and stack and stack[-1] == "[":
+            stack.pop()
+
+    # Si terminó dentro de un string, cerrarlo
+    if in_string:
+        fixed += '"'
+    # Cerrar estructuras pendientes en orden inverso
+    while stack:
+        opener = stack.pop()
+        fixed += "}" if opener == "{" else "]"
+
+    return json.loads(fixed)
 
 
 def _parse_context_response(data: dict) -> dict | None:
@@ -200,7 +275,7 @@ def _parse_context_response(data: dict) -> dict | None:
                 content = content[4:]
             content = content.strip()
 
-        parsed = json.loads(content)
+        parsed = _loads_lenient(content)
 
         title       = str(parsed.get("title", "")).strip()
         description = str(parsed.get("description", "")).strip()
@@ -215,33 +290,35 @@ def _parse_context_response(data: dict) -> dict | None:
         raw_tags = parsed.get("tags") or []
         tags = [str(t).strip() for t in raw_tags if str(t).strip()]
 
-        raw_dialogue = parsed.get("example_dialogue") or []
-        dialogue = []
-        for i, turn in enumerate(raw_dialogue):
-            role = str(turn.get("role", "")).strip().lower()
-            text = str(turn.get("text", "")).strip()
-            if role not in ("participant", "robot") or not text:
+        raw_phrases = parsed.get("phrases") or []
+        phrases = []
+        for item in raw_phrases:
+            text = str(item.get("text", "")).strip()
+            if not text:
                 continue
-            emotion = None
-            if role == "robot":
-                e = str(turn.get("emotion", "NORMAL")).strip().upper()
-                emotion = e if e in VALID_EMOTIONS else "NORMAL"
-            dialogue.append({
-                "role":        role,
-                "text":        text,
-                "emotion":     emotion,
-                "order_index": i,
+            e = str(item.get("emotion", "NORMAL")).strip().upper()
+            emotion = e if e in VALID_EMOTIONS else "NORMAL"
+            phrases.append({
+                "text":    text,
+                "emotion": emotion,
             })
 
-        logger.info("[AI] Contexto generado: title=%r turnos=%d", title, len(dialogue))
+        logger.info("[AI] Contexto generado: title=%r frases=%d", title, len(phrases))
         return {
-            "title":            title,
-            "description":      description,
-            "user_profile":     user_profile,
-            "tags":             tags,
-            "example_dialogue": dialogue,
+            "title":        title,
+            "description":  description,
+            "user_profile": user_profile,
+            "tags":         tags,
+            "phrases":      phrases,
         }
 
     except Exception as exc:
+        # Log generoso del contenido para poder diagnosticar errores de parseo
+        raw = ""
+        try:
+            raw = data["choices"][0]["message"]["content"]
+        except Exception:
+            pass
         logger.warning("[AI] No se pudo parsear contexto del LLM: %s", exc)
+        logger.warning("[AI] Contenido recibido (primeros 2000 chars):\n%s", raw[:2000])
         return None

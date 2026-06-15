@@ -229,12 +229,10 @@ def make_ai_suggestion(text: str, emotion: str) -> dict[str, Any]:
 
 # ── Schemas de contextos conversacionales ────────────────────────────────────
 
-class ContextMessageSchema(BaseModel):
-    """Una línea de diálogo dentro de un contexto."""
-    role:        str                # participant | robot
-    text:        str
-    emotion:     str | None = None  # solo para robot
-    order_index: int = 0
+class ContextPhraseSchema(BaseModel):
+    """Una frase predefinida del robot dentro de un contexto."""
+    text:    str
+    emotion: str | None = None
 
 
 class ContextGenerateRequest(BaseModel):
@@ -252,7 +250,7 @@ class ContextCreateRequest(BaseModel):
     prompt:       str | None = None
     source:       str = "manual"   # llm | manual
     model:        str | None = None
-    messages:     list[ContextMessageSchema] = []
+    phrases:      list[ContextPhraseSchema] = []
 
 
 class ContextUpdateRequest(BaseModel):
@@ -261,4 +259,4 @@ class ContextUpdateRequest(BaseModel):
     description:  str | None = None
     user_profile: str | None = None
     tags:         list[str] | None = None
-    messages:     list[ContextMessageSchema] | None = None
+    phrases:      list[ContextPhraseSchema] | None = None

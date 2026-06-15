@@ -174,8 +174,8 @@ class Context(Base):
     Unidad reutilizable de diseño conversacional.
 
     Cada contexto describe una situación tipo (descripción + perfil de usuario)
-    y contiene un diálogo ejemplo (context_messages) que sirve como base para
-    la recomendación contextual de la siguiente entrega.
+    y contiene un banco de frases (context_phrases) que el mago podrá disparar
+    durante una sesión para que el robot las vocalice directamente.
 
     source → 'llm' generado por el modelo de lenguaje
              'manual' creado a mano por el operador
@@ -198,22 +198,23 @@ class Context(Base):
     )
     extra: Mapped[dict] = mapped_column(JSONB, default=dict)
 
-    messages: Mapped[list["ContextMessage"]] = relationship(
+    phrases: Mapped[list["ContextPhrase"]] = relationship(
         back_populates="context",
         cascade="all, delete-orphan",
-        order_by="ContextMessage.order_index",
     )
 
 
-class ContextMessage(Base):
+class ContextPhrase(Base):
     """
-    Una línea de diálogo dentro de un contexto.
+    Frase predefinida del robot dentro de un contexto.
 
-    role → 'participant' (lo que diría la persona mayor)
-           'robot'       (lo que respondería el robot)
+    Cada frase es una intervención completa y autocontenida pensada para
+    abrir conversación sobre el tema del contexto: pregunta amplia,
+    comentario que invita a desarrollar, recuerdo provocador, etc.
+    NO son respuestas cortas tipo 'sí, me gusta'.
     """
 
-    __tablename__ = "context_messages"
+    __tablename__ = "context_phrases"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -224,9 +225,7 @@ class ContextMessage(Base):
         nullable=False,
         index=True,
     )
-    role: Mapped[str] = mapped_column(String(20), nullable=False)  # participant | robot
     text: Mapped[str] = mapped_column(Text, nullable=False)
     emotion: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    order_index: Mapped[int] = mapped_column(nullable=False, default=0)
 
-    context: Mapped["Context"] = relationship(back_populates="messages")
+    context: Mapped["Context"] = relationship(back_populates="phrases")

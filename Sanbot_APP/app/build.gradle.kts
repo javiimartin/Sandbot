@@ -82,6 +82,11 @@ dependencies {
     implementation(files("libs/gson-2.2.4.jar"))
     implementation("org.java-websocket:Java-WebSocket:1.5.3")
 
-
+    // CameraX para acceder a la cámara estándar de Android (la que hay debajo
+    // de la tablet del Sanbot). Es independiente del SDK de Qihan.
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
 }
 

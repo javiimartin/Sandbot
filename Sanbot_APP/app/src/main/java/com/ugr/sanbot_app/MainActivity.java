@@ -22,7 +22,6 @@ import com.qihancloud.opensdk.function.beans.speech.Grammar;
 import com.qihancloud.opensdk.function.unit.HardWareManager;
 import com.qihancloud.opensdk.function.unit.HandMotionManager;
 import com.qihancloud.opensdk.function.unit.HeadMotionManager;
-import com.qihancloud.opensdk.function.unit.MediaManager;
 import com.qihancloud.opensdk.function.unit.SpeechManager;
 import com.qihancloud.opensdk.function.unit.WheelMotionManager;
 import com.qihancloud.opensdk.function.unit.interfaces.speech.RecognizeListener;
@@ -157,16 +156,10 @@ public class MainActivity extends BindBaseActivity {
         emotionHelper = new EmotionHelper(systemManager);
         gestureHelper = new GestureHelper(handHelper, headHelper);
 
-        // MediaManager: si el SDK no lo soporta en este dispositivo, la cámara
-        // queda desactivada pero el resto de la app sigue funcionando.
-        MediaManager mediaManager = null;
-        try {
-            mediaManager = (MediaManager) getUnitManager(FuncConstant.MEDIA_MANAGER);
-            Log.i(TAG, "[Main] MediaManager obtenido correctamente");
-        } catch (Throwable t) {
-            Log.w(TAG, "[Main] MediaManager no disponible: " + t.getMessage());
-        }
-        cameraHelper = new CameraHelper(mediaManager);
+        // La cámara que usamos es la estándar de Android (la que está debajo
+        // de la tablet del Sanbot), no la frontal del SDK de Qihan. CameraX
+        // se encarga de todo; solo necesita un Context y un LifecycleOwner.
+        cameraHelper = new CameraHelper(this, this);
     }
 
     private void initWebSocket() {

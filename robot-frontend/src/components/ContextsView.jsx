@@ -121,6 +121,9 @@ function ContextCard({ ctx, onOpen, onDelete }) {
       )}
       <div className="ctx-card__footer">
         <span className="ctx-card__date">{formatDate(ctx.created_at)}</span>
+        <span className="ctx-card__count">
+          {ctx.phrase_count ?? 0} frases
+        </span>
         <button
           className="ctx-card__delete"
           onClick={e => { e.stopPropagation(); onDelete(ctx) }}
@@ -181,7 +184,7 @@ export default function ContextsView({ onBack }) {
       user_profile: '',
       tags:         [],
       source:       'manual',
-      messages:     [],
+      phrases:      [],
     })
   }
 

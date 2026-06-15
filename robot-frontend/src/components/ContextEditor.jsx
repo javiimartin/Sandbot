@@ -6,6 +6,9 @@
  * se hace por la presencia de `context.id`:
  *   - con id  → PUT /contexts/{id}
  *   - sin id  → POST /contexts
+ *
+ * Las frases del contexto son intervenciones completas del robot que el
+ * mago podrá disparar durante una sesión. Cada frase lleva su emoción.
  */
 import { useState } from 'react'
 
@@ -24,12 +27,10 @@ export default function ContextEditor({ context, onSaved, onCancel }) {
   const [userProfile, setUserProfile] = useState(context.user_profile || '')
   const [tags, setTags]               = useState(context.tags || [])
   const [tagInput, setTagInput]       = useState('')
-  const [messages, setMessages]       = useState(
-    (context.messages || []).map((m, i) => ({
-      role:        m.role,
-      text:        m.text,
-      emotion:     m.emotion,
-      order_index: m.order_index ?? i,
+  const [phrases, setPhrases]         = useState(
+    (context.phrases || []).map(p => ({
+      text:    p.text,
+      emotion: p.emotion || 'NORMAL',
     }))
   )
 
@@ -45,34 +46,20 @@ export default function ContextEditor({ context, onSaved, onCancel }) {
   }
   const removeTag = (t) => setTags(prev => prev.filter(x => x !== t))
 
-  /* ── Mensajes ── */
-  const addMessage = (role) => {
-    setMessages(prev => [...prev, {
-      role,
-      text:        '',
-      emotion:     role === 'robot' ? 'NORMAL' : null,
-      order_index: prev.length,
+  /* ── Frases ── */
+  const addPhrase = () => {
+    setPhrases(prev => [...prev, {
+      text:    '',
+      emotion: 'NORMAL',
     }])
   }
 
-  const updateMessage = (idx, patch) => {
-    setMessages(prev => prev.map((m, i) => i === idx ? { ...m, ...patch } : m))
+  const updatePhrase = (idx, patch) => {
+    setPhrases(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p))
   }
 
-  const removeMessage = (idx) => {
-    setMessages(prev => prev.filter((_, i) => i !== idx).map((m, i) => ({ ...m, order_index: i })))
-  }
-
-  const moveMessage = (idx, delta) => {
-    const newIdx = idx + delta
-    if (newIdx < 0 || newIdx >= messages.length) return
-    setMessages(prev => {
-      const arr = [...prev]
-      const tmp = arr[idx]
-      arr[idx] = arr[newIdx]
-      arr[newIdx] = tmp
-      return arr.map((m, i) => ({ ...m, order_index: i }))
-    })
+  const removePhrase = (idx) => {
+    setPhrases(prev => prev.filter((_, i) => i !== idx))
   }
 
   /* ── Guardar ── */
@@ -84,14 +71,12 @@ export default function ContextEditor({ context, onSaved, onCancel }) {
     setSaving(true)
     setError('')
 
-    // Limpiar mensajes vacíos antes de enviar
-    const cleanMessages = messages
-      .filter(m => m.text && m.text.trim())
-      .map((m, i) => ({
-        role:        m.role,
-        text:        m.text.trim(),
-        emotion:     m.role === 'robot' ? (m.emotion || 'NORMAL') : null,
-        order_index: i,
+    // Limpiar frases vacías antes de enviar
+    const cleanPhrases = phrases
+      .filter(p => p.text && p.text.trim())
+      .map(p => ({
+        text:    p.text.trim(),
+        emotion: p.emotion || 'NORMAL',
       }))
 
     try {
@@ -108,7 +93,7 @@ export default function ContextEditor({ context, onSaved, onCancel }) {
             prompt:       context.prompt || null,
             source:       context.source || 'manual',
             model:        context.model  || null,
-            messages:     cleanMessages,
+            phrases:      cleanPhrases,
           }),
         })
       } else {
@@ -120,7 +105,7 @@ export default function ContextEditor({ context, onSaved, onCancel }) {
             description:  description.trim(),
             user_profile: userProfile.trim() || null,
             tags,
-            messages:     cleanMessages,
+            phrases:      cleanPhrases,
           }),
         })
       }
@@ -216,53 +201,51 @@ export default function ContextEditor({ context, onSaved, onCancel }) {
         </div>
 
         <div className="ctx-editor__field">
-          <label>Diálogo ejemplo</label>
-          {messages.length === 0 && (
+          <label>Frases del robot ({phrases.length})</label>
+          <p className="ctx-hint">
+            Cada frase es una intervención completa que el robot dirá durante la
+            sesión. Deben invitar a la conversación: preguntas abiertas,
+            recuerdos, comentarios que pidan opinión. Evita respuestas cortas
+            tipo "sí, me gusta".
+          </p>
+
+          {phrases.length === 0 && (
             <div className="ctx-empty ctx-empty--small">
-              Aún no hay turnos. Añade el primero con los botones de abajo.
+              Aún no hay frases. Añade la primera con el botón de abajo.
             </div>
           )}
-          <div className="ctx-msg-list">
-            {messages.map((m, idx) => (
-              <div key={idx} className={`ctx-msg ctx-msg--${m.role}`}>
-                <div className="ctx-msg__head">
-                  <span className="ctx-msg__role">
-                    {m.role === 'participant' ? 'Participante' : 'Robot'}
-                  </span>
-                  {m.role === 'robot' && (
-                    <select
-                      className="ctx-msg__emotion"
-                      value={m.emotion || 'NORMAL'}
-                      onChange={e => updateMessage(idx, { emotion: e.target.value })}
-                    >
-                      {EMOTIONS.map(e => <option key={e} value={e}>{e}</option>)}
-                    </select>
-                  )}
-                  <div className="ctx-msg__actions">
-                    <button onClick={() => moveMessage(idx, -1)} disabled={idx === 0} aria-label="Subir">↑</button>
-                    <button onClick={() => moveMessage(idx,  1)} disabled={idx === messages.length - 1} aria-label="Bajar">↓</button>
-                    <button onClick={() => removeMessage(idx)} aria-label="Eliminar turno">×</button>
-                  </div>
+
+          <div className="ctx-phrase-list">
+            {phrases.map((p, idx) => (
+              <div key={idx} className="ctx-phrase">
+                <div className="ctx-phrase__head">
+                  <select
+                    className="ctx-phrase__emotion"
+                    value={p.emotion}
+                    onChange={e => updatePhrase(idx, { emotion: e.target.value })}
+                  >
+                    {EMOTIONS.map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                  <button
+                    className="ctx-phrase__delete"
+                    onClick={() => removePhrase(idx)}
+                    aria-label="Eliminar frase"
+                  >×</button>
                 </div>
                 <textarea
-                  className="ctx-msg__text"
+                  className="ctx-phrase__text"
                   rows={2}
-                  value={m.text}
-                  onChange={e => updateMessage(idx, { text: e.target.value })}
-                  placeholder={m.role === 'participant'
-                    ? 'Lo que diría la persona…'
-                    : 'Lo que respondería el robot…'}
+                  value={p.text}
+                  onChange={e => updatePhrase(idx, { text: e.target.value })}
+                  placeholder="Frase completa que dirá el robot…"
                 />
               </div>
             ))}
           </div>
 
-          <div className="ctx-msg-add">
-            <button className="ctx-btn-secondary" onClick={() => addMessage('participant')}>
-              + Turno de participante
-            </button>
-            <button className="ctx-btn-secondary" onClick={() => addMessage('robot')}>
-              + Turno de robot
+          <div className="ctx-phrase-add">
+            <button className="ctx-btn-secondary" onClick={addPhrase}>
+              + Añadir frase
             </button>
           </div>
         </div>

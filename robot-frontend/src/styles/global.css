@@ -1733,73 +1733,81 @@ html, body, #root {
   outline: none;
 }
 
-/* ── Lista de mensajes en el editor ── */
-.ctx-msg-list {
+/* ── Card del listado: contador de frases ── */
+.ctx-card__count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+/* ── Texto de ayuda dentro del editor ── */
+.ctx-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 8px;
+  background: var(--surface-2);
+  border-left: 2px solid var(--accent);
+  padding: 8px 12px;
+  border-radius: 0 4px 4px 0;
+}
+
+/* ── Lista de frases en el editor ── */
+.ctx-phrase-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.ctx-msg {
+.ctx-phrase {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: 8px;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.ctx-msg--participant { border-left: 3px solid var(--text-muted); }
-.ctx-msg--robot       { border-left: 3px solid var(--accent); }
 
-.ctx-msg__head {
+.ctx-phrase__head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
-.ctx-msg__role {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-}
-
-.ctx-msg__emotion {
+.ctx-phrase__emotion {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 11px;
-  padding: 3px 6px;
+  padding: 4px 6px;
   outline: none;
+  flex: 0 0 auto;
 }
 
-.ctx-msg__actions {
-  margin-left: auto;
-  display: flex;
-  gap: 4px;
-}
-.ctx-msg__actions button {
+.ctx-phrase__delete {
   background: none;
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 14px;
+  flex: 0 0 auto;
+  margin-left: auto;
   transition: border-color 0.2s, color 0.2s;
 }
-.ctx-msg__actions button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.ctx-msg__actions button:disabled { opacity: 0.3; cursor: not-allowed; }
+.ctx-phrase__delete:hover { border-color: var(--red); color: var(--red); }
 
-.ctx-msg__text {
+.ctx-phrase__text {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -1811,9 +1819,9 @@ html, body, #root {
   resize: vertical;
   transition: border-color 0.2s;
 }
-.ctx-msg__text:focus { border-color: var(--accent); }
+.ctx-phrase__text:focus { border-color: var(--accent); }
 
-.ctx-msg-add {
+.ctx-phrase-add {
   display: flex;
   gap: 8px;
   margin-top: 8px;

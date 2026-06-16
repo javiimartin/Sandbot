@@ -1,22 +1,29 @@
 /**
  * MainInterface
  *
- * Interfaz principal del mago: chat, emociones y barra de entrada.
- * Se monta solo cuando hay una sesión activa; eso garantiza que el
- * WebSocket de /ws/wizard se crea una única vez tras el setup.
+ * Interfaz principal del mago. Se monta solo cuando hay una sesión activa.
  *
- * @param {{ sessionId: string, user: object, mode: string }} session
+ * Layout:
+ *   - Panel izquierdo (arriba)   → cámara (vista del robot)
+ *   - Panel izquierdo (debajo)   → frases del contexto conversacional
+ *   - Centro                     → chat
+ *   - Panel derecho (arriba)     → botón control de movimiento
+ *   - Panel derecho (medio)      → sugerencia de IA
+ *   - Panel derecho (abajo)      → emociones del robot
+ *
+ * @param {{sessionId, user, mode, contextId?}} session
  */
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 import { useTimer }                     from '../hooks/useTimer'
 import { useWebSocket, DeliveryStatus } from '../hooks/useWebSocket'
 
-import TopBar             from './TopBar'
-import ChatArea           from './ChatArea'
-import BottomBar          from './BottomBar'
-import RobotCameraView    from './RobotCameraView'
-import AiSuggestionPanel  from './AiSuggestionPanel'
+import TopBar               from './TopBar'
+import ChatArea             from './ChatArea'
+import BottomBar            from './BottomBar'
+import RobotCameraView      from './RobotCameraView'
+import AiSuggestionPanel    from './AiSuggestionPanel'
+import ContextPhrasesPanel  from './ContextPhrasesPanel'
 
 const HTTP_BASE = import.meta.env.VITE_API_BASE_URL
 const WS_URL    = HTTP_BASE.replace('http', 'ws') + '/ws/wizard'
@@ -47,8 +54,20 @@ export default function MainInterface({ session, onEnd, onOpenMovement }) {
   const [aiSuggestion, setAiSuggestion]     = useState(null)
   const [aiGenerating, setAiGenerating]     = useState(false)
   const [inputOrigin, setInputOrigin]       = useState('wizard')
+  const [sessionContext, setSessionContext] = useState(null)
 
   const elapsed = useTimer()
+
+  /* ── Cargar contexto asociado a la sesión ── */
+  useEffect(() => {
+    if (!session.contextId) return
+    let cancelled = false
+    fetch(`${HTTP_BASE}/sessions/${session.sessionId}/context`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) setSessionContext(data) })
+      .catch(() => { if (!cancelled) setSessionContext(null) })
+    return () => { cancelled = true }
+  }, [session.sessionId, session.contextId])
 
   /* ── Handlers de WebSocket ── */
   const handleIncoming = useCallback((text) => {
@@ -114,6 +133,39 @@ export default function MainInterface({ session, onEnd, onOpenMovement }) {
     setAiSuggestion(null)
     setAiGenerating(false)
   }, [])
+
+  /* ── Disparar una frase del contexto ── */
+  const handleContextPhraseClick = useCallback(async (text, emotion) => {
+    // Aplicar la emoción asociada a la frase
+    try {
+      await fetch(`${HTTP_BASE}/messages/emotion`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ emotion, session_id: session.sessionId }),
+      })
+      setActiveEmotion(emotion)
+    } catch (err) {
+      console.error('[context phrase emotion] HTTP request failed:', err)
+    }
+    // Enviar la frase como mensaje del mago con origin='context'
+    const msg = createMessage('mago', text, { deliveryStatus: DeliveryStatus.SENT })
+    setMessages(prev => [...prev, msg])
+    try {
+      await fetch(`${HTTP_BASE}/messages/send`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          text,
+          message_id: msg.id,
+          session_id: session.sessionId,
+          origin:     'context',
+          emotion,
+        }),
+      })
+    } catch (err) {
+      console.error('[context phrase send] HTTP request failed:', err)
+    }
+  }, [session.sessionId])
 
   /* ── Finalizar sesión ── */
   const handleEndSession = useCallback(async () => {
@@ -183,9 +235,7 @@ export default function MainInterface({ session, onEnd, onOpenMovement }) {
 
       <div className="workspace">
 
-        <aside className="panel panel--left">
-          <RobotCameraView imageB64={cameraImage} />
-
+        <aside className={`panel panel--left${sessionContext ? ' panel--with-context' : ''}`}>
           <div className="emotion-panel">
             <div className="emotion-panel__title">Emociones del robot</div>
             <div className="emotion-grid">
@@ -202,6 +252,11 @@ export default function MainInterface({ session, onEnd, onOpenMovement }) {
               ))}
             </div>
           </div>
+
+          <ContextPhrasesPanel
+            context={sessionContext}
+            onPhraseClick={handleContextPhraseClick}
+          />
         </aside>
 
         <ChatArea messages={messages} />
@@ -210,12 +265,15 @@ export default function MainInterface({ session, onEnd, onOpenMovement }) {
           <button className="movement-open-btn" onClick={onOpenMovement}>
             Control de movimiento →
           </button>
+
           <AiSuggestionPanel
             suggestion={aiSuggestion}
             generating={aiGenerating}
             onAccept={handleAcceptSuggestion}
             onDiscard={handleDiscardSuggestion}
           />
+
+          <RobotCameraView imageB64={cameraImage} />
         </aside>
 
       </div>

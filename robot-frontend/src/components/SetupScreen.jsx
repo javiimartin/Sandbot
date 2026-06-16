@@ -22,6 +22,8 @@ export default function SetupScreen({ onStart, onViewRecords, onViewContexts }) 
   const [robotStatus, setRobotStatus]   = useState('unknown')
   const [loading, setLoading]           = useState(false)
   const [error, setError]               = useState('')
+  const [contexts, setContexts]         = useState([])
+  const [selectedContextId, setSelectedContextId] = useState('')  // '' = sin contexto
   const wsRef = useRef(null)
 
   // Cargar usuarios existentes
@@ -29,6 +31,14 @@ export default function SetupScreen({ onStart, onViewRecords, onViewContexts }) 
     fetch(`${HTTP_BASE}/users`)
       .then(r => r.json())
       .then(data => setUsers(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [])
+
+  // Cargar contextos disponibles
+  useEffect(() => {
+    fetch(`${HTTP_BASE}/contexts`)
+      .then(r => r.json())
+      .then(data => setContexts(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [])
 
@@ -107,14 +117,20 @@ export default function SetupScreen({ onStart, onViewRecords, onViewContexts }) 
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          name:    sessionName.trim(),
-          user_id: selectedUser.user_id,
+          name:       sessionName.trim(),
+          user_id:    selectedUser.user_id,
+          context_id: selectedContextId || null,
         }),
       })
       if (!res.ok) throw new Error()
       const data = await res.json()
       wsRef.current?.close()
-      onStart({ sessionId: data.session_id, user: selectedUser, mode })
+      onStart({
+        sessionId: data.session_id,
+        user:      selectedUser,
+        mode,
+        contextId: selectedContextId || null,
+      })
     } catch {
       setError('Error al iniciar la sesión. Comprueba la conexión con el backend.')
       setLoading(false)
@@ -237,6 +253,26 @@ export default function SetupScreen({ onStart, onViewRecords, onViewContexts }) 
               value={sessionName}
               onChange={e => setSessionName(e.target.value)}
             />
+          </div>
+
+          {/* ── Contexto conversacional ── */}
+          <div className="setup-field">
+            <label>Contexto conversacional</label>
+            <select
+              className="setup-input"
+              value={selectedContextId}
+              onChange={e => setSelectedContextId(e.target.value)}
+            >
+              <option value="">Sin contexto</option>
+              {contexts.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.title} ({c.phrase_count ?? 0} frases)
+                </option>
+              ))}
+            </select>
+            <p className="setup-mode-hint">
+              Las frases del contexto aparecerán durante la sesión.
+            </p>
           </div>
 
           {/* ── Modo de sesión ── */}

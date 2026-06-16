@@ -50,7 +50,7 @@ import java.util.concurrent.Executors;
 public class CameraHelper {
 
     private static final String TAG                 = "CameraHelper";
-    private static final long   CAPTURE_INTERVAL_MS = 5000L;
+    private static final long   CAPTURE_INTERVAL_MS = 2000L;
     private static final int    JPEG_QUALITY        = 60;
     private static final Size   TARGET_SIZE         = new Size(640, 480);
 

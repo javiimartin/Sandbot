@@ -76,10 +76,19 @@ class Session(Base):
     ended_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Contexto conversacional activo (opcional). Si está presente, el mago
+    # podrá disparar frases del contexto desde la interfaz durante la sesión.
+    context_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("contexts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # Información libre del investigador (condición experimental, notas…)
     info: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
 
     user: Mapped["User | None"] = relationship(back_populates="sessions")
+    context: Mapped["Context | None"] = relationship()
     messages: Mapped[list["Message"]] = relationship(
         back_populates="session", cascade="all, delete-orphan"
     )

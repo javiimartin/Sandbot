@@ -28,7 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.db_models import Message, RobotEvent, Session, User
+from app.db_models import Context, ContextPhrase, Message, RobotEvent, Session, User
 from app import session_state
 
 logger = logging.getLogger(__name__)
@@ -46,10 +46,11 @@ class UserCreateRequest(BaseModel):
 
 
 class SessionStartRequest(BaseModel):
-    name:      str                  # nombre identificativo de la sesión
-    user_id:   uuid.UUID | None = None
-    condition: str | None = None    # e.g. "baseline", "experimental"
-    notes:     str | None = None
+    name:       str                  # nombre identificativo de la sesión
+    user_id:    uuid.UUID | None = None
+    context_id: uuid.UUID | None = None   # contexto conversacional asociado (opcional)
+    condition:  str | None = None    # e.g. "baseline", "experimental"
+    notes:      str | None = None
 
 
 # ── Usuarios ─────────────────────────────────────────────────────────────────
@@ -97,6 +98,11 @@ async def start_session(body: SessionStartRequest, db: AsyncSession = Depends(ge
         if result.scalar_one_or_none() is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Participante no encontrado.")
 
+    if body.context_id is not None:
+        ctx_res = await db.execute(select(Context).where(Context.id == body.context_id))
+        if ctx_res.scalar_one_or_none() is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Contexto no encontrado.")
+
     # Cerrar todas las sesiones que sigan abiertas antes de crear la nueva
     open_res = await db.execute(select(Session).where(Session.ended_at.is_(None)))
     open_sessions = open_res.scalars().all()
@@ -108,17 +114,62 @@ async def start_session(body: SessionStartRequest, db: AsyncSession = Depends(ge
         await db.commit()
 
     info = {k: v for k, v in {"condition": body.condition, "notes": body.notes}.items() if v}
-    session = Session(user_id=body.user_id, name=body.name, info=info)
+    session = Session(
+        user_id    = body.user_id,
+        name       = body.name,
+        info       = info,
+        context_id = body.context_id,
+    )
     db.add(session)
     await db.commit()
     await db.refresh(session)
 
     session_state.set_active(session.id)
-    logger.info("[session] Iniciada | id=%s | name=%r | user=%s",
-                session.id, session.name, body.user_id)
+    logger.info("[session] Iniciada | id=%s | name=%r | user=%s | context=%s",
+                session.id, session.name, body.user_id, body.context_id)
     return {"session_id": str(session.id), "name": session.name,
             "user_id": str(body.user_id) if body.user_id else None,
+            "context_id": str(body.context_id) if body.context_id else None,
             "started_at": session.started_at}
+
+
+@router.get("/sessions/{session_id}/context", status_code=status.HTTP_200_OK,
+            tags=["sessions"], summary="Contexto asociado a una sesión (frases incluidas)")
+async def get_session_context(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Devuelve el contexto conversacional asociado a la sesión, con todas sus
+    frases. Si la sesión no tiene contexto asignado, devuelve null.
+    """
+    res = await db.execute(select(Session).where(Session.id == session_id))
+    session = res.scalar_one_or_none()
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sesión no encontrada.")
+
+    if session.context_id is None:
+        return None
+
+    ctx_res = await db.execute(select(Context).where(Context.id == session.context_id))
+    ctx = ctx_res.scalar_one_or_none()
+    if ctx is None:
+        return None
+
+    phr_res = await db.execute(
+        select(ContextPhrase).where(ContextPhrase.context_id == ctx.id)
+    )
+    phrases = phr_res.scalars().all()
+
+    return {
+        "id":           str(ctx.id),
+        "title":        ctx.title,
+        "description":  ctx.description,
+        "user_profile": ctx.user_profile,
+        "tags":         ctx.tags or [],
+        "source":       ctx.source,
+        "phrases": [
+            {"id": str(p.id), "text": p.text, "emotion": p.emotion}
+            for p in phrases
+        ],
+    }
 
 
 @router.post("/sessions/{session_id}/end", status_code=status.HTTP_200_OK, tags=["sessions"],
